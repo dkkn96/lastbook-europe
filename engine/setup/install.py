@@ -274,13 +274,13 @@ def carry_over(old, new):
     return moved
 
 
-def switch(new_lib, target):
+def switch(new_lib, target, replace_existing=True):
     """The renames. Returns the old library's new name, or None when there was none. Raises Refused, leaving things as they were."""
     new_lib, target = Path(new_lib), Path(target)
     if not is_library(new_lib):
         raise Refused('activate', 'The new library is not complete.')
     old = None
-    if target.exists():
+    if replace_existing and target.exists():
         old = old_name(target)
         if is_library(target):
             carry_over(target, new_lib)
@@ -454,7 +454,7 @@ def _pending_ok(d, work):
         return False
     target = Path(work).with_name(Path(work).name[:-len('.setup')])     # the library the work folder belongs to, whatever its name
     new = Path(work) / ('unpack-map' if d.get('kind') == 'map' else 'unpack') / DATA_NAME
-    if d.get('kind') not in (None, 'map') or _real(d['target']) != _real(target) or _real(d['new']) != _real(new):
+    if d.get('kind') not in (None, 'map', 'map-only') or _real(d['target']) != _real(target) or _real(d['new']) != _real(new):
         return False
     old = d.get('old')
     if old is not None and not (isinstance(old, str) and _real(Path(old).parent) == _real(target.parent)
@@ -493,7 +493,7 @@ def apply_pending(pend, work):
         lib_ok = is_library(target)
     else:
         try:
-            old = switch(d['new'], target)
+            old = switch(d['new'], target, replace_existing=d.get('kind') != 'map-only')
         except Refused as e:
             print('setup: switch failed:', e.message, flush=True)
             pend.unlink()

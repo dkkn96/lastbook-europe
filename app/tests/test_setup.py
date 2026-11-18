@@ -973,6 +973,42 @@ def make_map(path, state='CA', extra=None):
 
 
 class Maps(Base):
+    def test_map_only_first_run_downloads_only_the_selected_country_parts(self):
+        archive_path = self.tmp / 'country.zip'
+        files = make_map(archive_path, state='SI-ALL')
+        data = archive_path.read_bytes()
+        pieces = [data[:113], data[113:len(data) - 11], data[-11:]]
+        m = self.manifest().current
+        entry = {'id': 'SI-ALL', 'title': 'Slovenia', 'kind': 'region', 'includes': '',
+                 'installed_bytes': sum(map(len, files.values())), 'download_bytes': len(data),
+                 'available': True, 'multipart': True, 'files': []}
+        for index, piece in enumerate(pieces, 1):
+            name = f'Lastbook-Map-SI-ALL.zip.{index:02d}'
+            self.files.data[name] = piece
+            entry['files'].append({'name': name, 'url': f'{self.base}/{name}', 'size': len(piece),
+                                   'sha256': sha(piece), 'kind': 'zip'})
+        croatia = {'name': 'Lastbook-Map-HR-ALL.zip', 'url': f'{self.base}/Lastbook-Map-HR-ALL.zip',
+                   'size': len(data), 'sha256': sha(data), 'kind': 'zip'}
+        self.files.data[croatia['name']] = data
+        m['maps'] = [entry, {**entry, 'id': 'HR-ALL', 'title': 'Croatia', 'multipart': False, 'files': [croatia]}]
+        mf = manifest.Manifest(bundled=m, remote=None, allowed=ALLOWED, context=self.ctx)
+        s = self.setup(manifest=mf)
+        self.assertTrue(s.state()['map_only'])
+        self.assertEqual(s.start(map_id='SI-ALL')['code'], 'nothing')
+        job = s.start(map_id='SI-ALL', map_only=True)
+        self.assertEqual([(i['kind'], i['id']) for i in job['items']], [('map', 'SI-ALL')])
+        self.assertEqual(self.wait(s)['state'], 'done')
+        self.assertEqual([row[0] for row in self.files.log],
+                         [file['name'] for file in entry['files']])
+        lib, note = api.startup(self.settings)
+        self.assertIsNone(note.get('error'))
+        self.assertEqual(install.map_name(lib), 'SI-ALL')
+        self.assertEqual(json.loads((lib / 'library-data/catalog.json').read_text()), [])
+        self.assertEqual(self.setup('manage', current=lib, manifest=mf).current_info()['pack'], 'map-only')
+        self.assertEqual((lib / 'derived/geo/map.sqlite').read_bytes(), files['derived/geo/map.sqlite'])
+        api.opened(self.settings, lib, note)
+        self.assertEqual(s.start(map_id='SI-ALL', map_only=True)['code'], 'folder')
+
     def test_local_region_switches_an_all_library_without_network(self):
         folder = self.tmp / 'regional-packs'
         folder.mkdir()

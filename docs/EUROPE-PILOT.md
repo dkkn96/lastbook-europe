@@ -1,12 +1,14 @@
 # Lastbook Europe pilot
 
-Lastbook Europe has two offline maps: [Italy](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.2) and [Valle d’Aosta / Vallée d’Aoste](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.1). Both include streets, water, named places and points of interest such as pharmacies. The Valle d’Aosta pack also includes building footprints. The maps have no street-address index, elevation tiles or route planner. The selected region becomes the active map when Lastbook restarts.
+Lastbook Europe offers country maps built from OpenStreetMap, including [Italy](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.2) and the smaller [Valle d’Aosta / Vallée d’Aoste](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.1) pack. The setup selector lists the verified maps and the download size for each. The maps include streets, water, named places and points of interest such as pharmacies. The Valle d’Aosta pack also includes building footprints. Each library has one active map, and it changes when Lastbook restarts.
 
 ## Install on Mac
 
-Download the [Lastbook Europe disk image](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.3) for Apple Silicon and macOS 14 or later. Open it, drag **Lastbook Europe.app** to **Applications**, and launch the copied app. This preview uses an ad-hoc code signature. Apple has not notarized it. If macOS blocks it, see [Apple's guidance on opening apps](https://support.apple.com/en-us/102445).
+Download the [Lastbook Europe disk image](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.4) for Apple Silicon and macOS 14 or later. Open it, drag **Lastbook Europe.app** to **Applications**, and launch the copied app. This preview uses an ad-hoc code signature. Apple has not notarized it. If macOS blocks it, see [Apple's guidance on opening apps](https://support.apple.com/en-us/102445).
 
-Choose a library and an offline map in setup. The map downloads directly from GitHub and the app verifies its SHA-256 before installing it. The Italy pack downloads 1.17 GB and takes 3.03 GB once installed. Valle d’Aosta downloads about 14 MB and takes 38 MB. A fresh library is a separate download. To use an existing library, select it in setup. Open **Library and local AI → Choose map** to switch areas later. One map is active per library.
+Choose a country and leave **Map only** selected to download just that map and open it offline. You can choose a library or a model separately. To use an existing library, select it in setup. To switch areas later, open **Settings → Library and local AI → Choose map**.
+
+The app verifies the SHA-256 of each download from GitHub before installation. Large maps use multiple release assets. Setup downloads those assets in order and installs them as one map. The [country map release](https://github.com/dkkn96/lastbook-europe/releases/tag/maps-europe-20261118) records each pack’s coverage and OpenStreetMap snapshot. The Spain pack follows Geofabrik’s mainland and Balearic extract. The Ireland pack covers the island, including Northern Ireland.
 
 ## Run from source
 

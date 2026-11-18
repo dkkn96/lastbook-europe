@@ -2136,6 +2136,7 @@ class Handler(library.Handler):
                 sources = (catalog()['by_path'].get(SOURCES_PAGE) or {}).get('id')
                 return self.send_json({**{k: s.get(k) for k in ('resources', 'pdfs', 'pdf_pages', 'web_pages', 'videos', 'collections', 'document_bytes')},
                                        'zims': zim_names(), 'sources': sources, 'pack': bool(pack_info()),
+                                       'map_only': (pack_info() or {}).get('name') == 'map-only',
                                        'pins': bool(map_contents()['layers']) if pack_info() else True})
             if path.startswith('/api/') and path not in self.LIBRARY_ROUTES:
                 return self.send_json({'error': 'not found'}, 404)

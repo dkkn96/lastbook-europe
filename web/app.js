@@ -1157,5 +1157,9 @@ async function about() {
   if (IN_WINDOW && window.LBUpdate) LBUpdate.mount(main);   // Check for updates (web/update.js): only when the person asks
 }
 
-route();
+if (location.hash) route();
+else libInfo().then(info => {
+  if (!location.hash && info.map_only) history.replaceState(history.state, '', '#/map');
+  route();
+});
 if ('serviceWorker' in navigator && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) navigator.serviceWorker.register('/sw.js').catch(() => { });

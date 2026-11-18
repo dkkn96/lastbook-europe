@@ -71,7 +71,7 @@ ICON = Path(SPECPATH) / 'Lastbook.icns'
 app = BUNDLE(coll, name='Lastbook.app', icon=str(ICON) if ICON.exists() else None, bundle_identifier='org.lastbookeurope.desktop', version='0.1.0', info_plist={
     'CFBundleDisplayName': 'Lastbook Europe',
     'CFBundleName': 'Lastbook Europe',
-    'CFBundleVersion': '3',
+    'CFBundleVersion': '4',
     'LSApplicationCategoryType': 'public.app-category.reference',
     'LSMinimumSystemVersion': '14.0',   # what numpy's binaries ask for
     'LSRequiresNativeExecution': True,

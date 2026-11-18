@@ -17,12 +17,13 @@ import threading
 import time
 import traceback
 import uuid
+from contextlib import ExitStack
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from engine.local_models import read_state
 
-from . import download, hardware, install
+from . import archive, download, hardware, install
 from .manifest import Manifest
 from .europe_maps import URLS as EUROPE_MAP_URLS
 
@@ -437,6 +438,7 @@ class Setup:
         self.manifest.fetch_once()
         hw = self.hardware()
         return {'mode': self.mode, 'hardware': hw, 'manifest': self.manifest.public(), 'current': self.current_info(),
+                'map_only': self.mode == 'first-run' and any(x['available'] and x['kind'] == 'region' for x in self.manifest.maps()),
                 'found': self.found(), 'recommend': self.recommend(hw), 'job': self.public_job()}
 
     def public_job(self):
@@ -452,7 +454,7 @@ class Setup:
             return p.parent if p.name == DATA_NAME else p
         return self.current.parent if self.current else self.default_parent
 
-    def start(self, pack_id=None, ai=False, folder=None, sources=None, explicit=False, repair=False, map_id=None, address_id=None):
+    def start(self, pack_id=None, ai=False, folder=None, sources=None, explicit=False, repair=False, map_id=None, address_id=None, map_only=False):
         if repair:
             return self._start_repair(ai)
         with self.lock:
@@ -473,6 +475,9 @@ class Setup:
             mp = self.manifest.map(map_id) if map_id else None
             if map_id and (not mp or not mp['available']):
                 return {'error': 'That map is not available yet.', 'code': 'unavailable'}
+            if map_only and (self.mode != 'first-run' or self.current or pack or model or address_id
+                             or not mp or mp['kind'] != 'region'):
+                return {'error': 'Choose a country or regional map to set up a map-only library.', 'code': 'unavailable'}
             requested_address = address_id
             address_id = address_id or map_id or (pack or {}).get('map') or cur.get('map')
             if address_id in ('base', 'us'):
@@ -493,7 +498,7 @@ class Setup:
                 model = None       # already here, and an upgrade in place carries it over
             if mp and not pack and cur.get('map') == mp['id']:
                 mp = None          # this state's map is the one here already
-            if self.mode == 'first-run' and not pack and (model or mp or addresses):
+            if self.mode == 'first-run' and not pack and not map_only and (model or mp or addresses):
                 return {'error': 'Choose a library first.', 'code': 'nothing'}
             if not pack and not model and not mp and not addresses:
                 if self.mode == 'first-run':
@@ -512,6 +517,8 @@ class Setup:
             if self.mode == 'first-run' and target.exists() and not install.is_library(target):
                 if any(target.iterdir()):
                     return {'error': f'There is already a folder called {DATA_NAME} there that is not a library. Choose another place.', 'code': 'folder'}
+            if map_only and install.is_library(target):
+                return {'error': 'There is already a library here. Open it to add the map or choose another folder.', 'code': 'folder'}
             work = _work_for(target)
             srcs = dict(self.sources)
             srcs.update(sources or {})
@@ -521,7 +528,7 @@ class Setup:
             names = ([f['name'] for f in pack['files']] if pack else []) + ([model['file']] if model else []) + ([f['name'] for f in mp['files']] if mp else []) + ([f['name'] for f in addresses['files']] if addresses else [])
             have = set(srcs)
             need = install.need_bytes(pack, model, have) + _map_need(mp, have) + _map_need(addresses, have)
-            preserve_map = bool(pack and cur.get('pack') == pack['id'] and target == self.current and not mp and cur.get('map') not in (None, 'base'))
+            preserve_map = bool(pack and cur.get('pack') in (pack['id'], 'map-only') and target == self.current and not mp and cur.get('map') not in (None, 'base'))
             if preserve_map:
                 need += cur['map_bytes']
             for name in names:     # what an earlier run already downloaded is on the disk already
@@ -553,7 +560,7 @@ class Setup:
                         'folder': str(target),
                         'plan': {'pack': pack, 'model': model, 'map': mp, 'addresses': addresses, 'parent': str(parent), 'target': str(target), 'work': str(work),
                                  'sources': {k: v for k, v in srcs.items() if k in names}, 'explicit': explicit,
-                                 'retried': {}, 'switch': bool(pack)}}
+                                 'retried': {}, 'switch': bool(pack or map_only), 'map_only': map_only}}
             s = self._settings()
             s['work'] = str(work)
             self._save_settings(s)
@@ -987,7 +994,7 @@ class Setup:
             if metadata.get('content_revision') != pack['revision']:
                 raise install.Refused('unpack', 'The library content version does not match this download.')
         current = self.current_info() or {}
-        if (not plan.get('repair') and not plan.get('map') and Path(plan['target']) == self.current and current.get('pack') == pack['id']
+        if (not plan.get('repair') and not plan.get('map') and Path(plan['target']) == self.current and current.get('pack') in (pack['id'], 'map-only')
                 and current.get('map') not in (None, 'base')):
             install.copy_map(self.current, lib)
         install._write_json(lib / 'setup-pack.json', {'pack': pack['id'], 'installed': _now(), 'files': [f['name'] for f in pack['files']]})
@@ -1007,26 +1014,37 @@ class Setup:
         tracker = _Item(it)
         self._set(it, 'unpacking', bytes_done=0, bytes_total=mp['installed_bytes'])
         staged = work / 'unpack-map'
-        for path, _ in got:
-            install.check_zip(path, mp['installed_bytes'], install.map_member)
-        if mp.get('kind') == 'region':
-            receipt = staged / 'archives.json'
-            archives = {f['name']: f['sha256'] for f in mp['files']}
-            try:
-                previous = json.loads(receipt.read_text(encoding='utf-8'))
-            except (OSError, ValueError):
-                previous = None
-            if previous != archives:
-                if staged.exists():
-                    shutil.rmtree(staged)
-                staged.mkdir()
-                install._write_json(receipt, archives)
-        for path, _ in got:
-            lib = install.unpack(path, staged, mp['installed_bytes'], control, lambda d, t: tracker.progress(d, t, 'unpacking'), allowed=install.map_member)
+        with ExitStack() as opened:
+            paths = [path for path, _ in got]
+            if mp.get('multipart'):
+                paths = [opened.enter_context(archive.open_parts(paths))]
+            for path in paths:
+                install.check_zip(path, mp['installed_bytes'], install.map_member)
+            if mp.get('kind') == 'region':
+                receipt = staged / 'archives.json'
+                hashes = {f['name']: f['sha256'] for f in mp['files']}
+                try:
+                    previous = json.loads(receipt.read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    previous = None
+                if previous != hashes:
+                    if staged.exists():
+                        shutil.rmtree(staged)
+                    staged.mkdir()
+                    install._write_json(receipt, hashes)
+            for path in paths:
+                lib = install.unpack(path, staged, mp['installed_bytes'], control,
+                                     lambda d, t: tracker.progress(d, t, 'unpacking'), allowed=install.map_member)
         if install.map_name(lib) != mp['id']:
             raise install.Refused('unpack', f'The map file says it is {install.map_name(lib)}, not {mp["id"]}.')
         if plan['switch']:
-            install.replace_map_in(work / 'unpack' / DATA_NAME, lib)
+            target = work / 'unpack' / DATA_NAME
+            if plan.get('map_only'):
+                (target / 'library-data').mkdir(parents=True, exist_ok=True)
+                install._write_json(target / 'library-data' / 'catalog.json', [])
+                install._write_json(target / 'library-data' / 'summary.json', {})
+                install._write_json(target / 'pack.json', {'name': 'map-only', 'title': 'Map only'})
+            install.replace_map_in(target, lib)
             shutil.rmtree(staged, ignore_errors=True)
         else:
             plan['map_new'] = str(lib)
@@ -1105,7 +1123,9 @@ class Setup:
                 lib = work / 'unpack' / DATA_NAME
                 if not install.is_library(lib):
                     raise install.Refused('activate', 'The new library is not complete.')
-                install.stage_switch(_pending_file(self.settings_dir), lib, plan['target'], plan.get('model_file'), model_sha256=plan.get('model_sha256'))
+                kind = 'map-only' if plan.get('map_only') else None
+                install.stage_switch(_pending_file(self.settings_dir), lib, plan['target'], plan.get('model_file'),
+                                     kind=kind, model_sha256=plan.get('model_sha256'))
             elif plan.get('map_new'):
                 install.stage_switch(_pending_file(self.settings_dir), plan['map_new'], plan['target'], kind='map')
             self.job['state'] = 'done'
@@ -1271,7 +1291,8 @@ def _default():
 ROUTES = {
     ('GET', 'state'): lambda s, b: s.state(),
     ('GET', 'job'): lambda s, b: s.public_job(),
-    ('POST', 'start'): lambda s, b: s.start(b.get('pack'), b.get('ai', False), b.get('folder'), repair=bool(b.get('repair')), map_id=b.get('map') or None, address_id=b.get('address_id') or None),
+    ('POST', 'start'): lambda s, b: s.start(b.get('pack'), b.get('ai', False), b.get('folder'), repair=bool(b.get('repair')),
+                                           map_id=b.get('map') or None, address_id=b.get('address_id') or None, map_only=b.get('map_only') is True),
     ('POST', 'pause'): lambda s, b: s.pause(),
     ('POST', 'resume'): lambda s, b: s.resume(),
     ('POST', 'cancel'): lambda s, b: s.cancel(),
