@@ -31,7 +31,10 @@ def record_country(code, config, tag, assets, folder):
             f'{code}: name or bounds changed')
     require(report['features']['road'] > 0 and report['place_finder_rows'] > 0 and report['help_points_total'] > 0,
             f'{code}: incomplete map')
-    require(report['source']['data_as_of'] and report['source']['licence'] == 'ODbL 1.0', f'{code}: missing provenance')
+    source = report['source']
+    known_urls = {config['source'], config.get('snapshot', {}).get('source')}
+    require(source['url'] in known_urls and source['data_as_of'] and source['licence'] == 'ODbL 1.0'
+            and source['bytes'] > 0 and re.fullmatch('[0-9a-f]{64}', source['sha256']), f'{code}: missing provenance')
     whole = entry['file']
     parts = entry.get('parts') or [whole]
     require(whole['name'] == stem + '.zip' and whole['size'] == sum(part['size'] for part in parts), f'{code}: invalid archive')

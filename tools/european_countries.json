@@ -292,5 +292,19 @@
     "bbox": [20.013, 41.854, 21.794, 43.278],
     "check": ["Pristina", 42.6629, 21.1655],
     "snapshot": {"source": "https://download.geofabrik.de/europe/kosovo-261117.osm.pbf", "md5": "7cd8a47db916cad8d1ea8a6614a513d8"}
+  },
+  "SM": {
+    "name": "San Marino",
+    "source": "https://download.openstreetmap.fr/extracts/europe/san_marino.osm.pbf",
+    "bbox": [12.38, 43.88, 12.54, 44.01],
+    "check": ["San Marino", 43.9367, 12.4464],
+    "snapshot": {"source": "https://download.openstreetmap.fr/extracts/europe/san_marino.osm.pbf", "md5": "e5d42e0458f3608716e2c422e0efaebf"}
+  },
+  "VA": {
+    "name": "Vatican City",
+    "source": "https://download.openstreetmap.fr/extracts/europe/vatican_city.osm.pbf",
+    "bbox": [12.437, 41.894, 12.462, 41.916],
+    "check": ["Vatican", 41.9022, 12.4539],
+    "snapshot": {"source": "https://download.openstreetmap.fr/extracts/europe/vatican_city.osm.pbf", "md5": "a26239a9e4f7ba39a01fa4352acfc0e3"}
   }
 }

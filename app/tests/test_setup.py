@@ -1008,6 +1008,13 @@ class Maps(Base):
         self.assertEqual((lib / 'derived/geo/map.sqlite').read_bytes(), files['derived/geo/map.sqlite'])
         api.opened(self.settings, lib, note)
         self.assertEqual(s.start(map_id='SI-ALL', map_only=True)['code'], 'folder')
+        manage = self.setup('manage', current=lib, manifest=mf)
+        job = manage.start('small')
+        self.assertEqual([item['kind'] for item in job['items']], ['pack'])
+        self.assertEqual(self.wait(manage)['state'], 'done')
+        lib, note = api.startup(self.settings)
+        self.assertIsNone(note.get('error'))
+        self.assertEqual(install.map_name(lib), 'SI-ALL')
 
     def test_local_region_switches_an_all_library_without_network(self):
         folder = self.tmp / 'regional-packs'

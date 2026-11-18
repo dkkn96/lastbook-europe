@@ -73,7 +73,9 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/source"
           source_url=$(jq -er --arg code "$COUNTRY" '.[$code].snapshot.source // .[$code].source' tools/european_countries.json)
-          [[ "$source_url" =~ ^https://download\.geofabrik\.de/[a-z0-9/-]+-(latest|[0-9]{6})\.osm\.pbf$ ]]
+          geofabrik='^https://download\.geofabrik\.de/[a-z0-9/-]+-(latest|[0-9]{6})\.osm\.pbf$'
+          osm_france='^https://download\.openstreetmap\.fr/extracts/europe/[a-z_]+\.osm\.pbf$'
+          [[ "$source_url" =~ $geofabrik || "$source_url" =~ $osm_france ]]
           fetch=(curl --fail --silent --show-error --location --retry 4 --retry-connrefused --connect-timeout 15)
           md5=$(jq -r --arg code "$COUNTRY" '.[$code].snapshot.md5 // empty' tools/european_countries.json)
           if [ -z "$md5" ]; then
@@ -83,7 +85,7 @@ jobs:
           actual_url=$("${fetch[@]}" \
             --write-out '%{url_effective}' --output "$RUNNER_TEMP/source/snapshot.osm.pbf" "$source_url")
           printf '%s  %s\n' "$md5" "$RUNNER_TEMP/source/snapshot.osm.pbf" | md5sum --check
-          [[ "$actual_url" =~ ^https://download\.geofabrik\.de/[a-z0-9/-]+[-][a-z0-9]+\.osm\.pbf$ ]]
+          [[ "$actual_url" =~ $geofabrik || "$actual_url" =~ $osm_france ]]
           file="$RUNNER_TEMP/source/${actual_url##*/}"
           mv "$RUNNER_TEMP/source/snapshot.osm.pbf" "$file"
           printf 'PBF=%s\nPBF_URL=%s\n' "$file" "$actual_url" >> "$GITHUB_ENV"
