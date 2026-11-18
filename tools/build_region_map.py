@@ -36,6 +36,7 @@ import math
 import re
 import sqlite3
 import sys
+import tempfile
 import time
 from array import array
 from pathlib import Path
@@ -266,12 +267,12 @@ def chains(ways):
 
 # ------------------------------------------------------------------ reading the extract
 class Region(osmium.SimpleHandler):
-    def __init__(self, box, prefer, languages=()):
+    def __init__(self, box, prefer, features, languages=(), buildings=True):
         super().__init__()
         self.box, self.prefer = box, prefer
         self.languages = languages
-        self.feats, self.pois, self.places, self.coast = [], [], [], []
-        self.seen_area_ways = set()
+        self.features, self.buildings = features, buildings
+        self.pois, self.places, self.coast = [], [], []
 
     def touches(self, minx, maxx, miny, maxy):
         w, s, e, n = self.box
@@ -287,7 +288,7 @@ class Region(osmium.SimpleHandler):
 
     def add(self, layer, cls, name, minz, parts):
         if parts:
-            self.feats.append((layer, cls, name, minz, parts))
+            self.features.add(layer, cls, name, minz, parts)
 
     def point(self, t, lon, lat):
         cls = poi_class(t)
@@ -342,7 +343,7 @@ class Region(osmium.SimpleHandler):
     def area(self, a):
         t = a.tags
         nat, lu, lei = t.get('natural'), t.get('landuse'), t.get('leisure')
-        bld = t.get('building')
+        bld = self.buildings and t.get('building')
         cls = poi_class(t)
         water = nat == 'water' or lu in ('reservoir', 'basin') or t.get('waterway') == 'riverbank'
         wet = nat == 'wetland'
@@ -388,6 +389,21 @@ def sha256(path):
     return h.hexdigest()
 
 
+class Features:
+    """Write geometries as osmium emits them so a national extract fits in memory."""
+
+    def __init__(self, db):
+        self.db = db
+        self.total = 0
+        self.layers = {}
+
+    def add(self, layer, cls, name, minz, parts):
+        self.total += 1
+        self.db.execute('INSERT INTO feat VALUES (?,?,?,?,?,?)', (self.total, layer, cls, name, minz, pack(parts)))
+        self.db.execute('INSERT INTO feat_idx VALUES (?,?,?,?,?,?,?)', (self.total, *bounds(parts), minz, 30))
+        self.layers[layer] = self.layers.get(layer, 0) + 1
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('pbf', help='an OpenStreetMap extract (.osm.pbf), for example from download.geofabrik.de')
@@ -401,6 +417,7 @@ def main():
                     help='index additional name tags, for example --search-language it --search-language fr')
     ap.add_argument('--source', help='source URL for the build report')
     ap.add_argument('--no-buildings', action='store_true', help='leave building outlines out (a smaller file)')
+    ap.add_argument('--disk-index', action='store_true', help='put the OSM node location index on disk for large extracts')
     args = ap.parse_args()
     if not re.fullmatch(r'[A-Z]{2}-[A-Z0-9]{1,8}', args.id):
         ap.error('--id must be a country-prefixed regional ID, for example IT-23')
@@ -412,22 +429,27 @@ def main():
         ap.error('--bbox must be west,south,east,north inside the map extent')
     pbf = Path(args.pbf)
     root = Path(args.out) / args.id
-    t0 = time.time()
-
     if root.exists():
         ap.error(f'{root} already exists. Choose another --out.')
+    root.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.building-', dir=root.parent) as staging:
+        temporary = Path(staging) / root.name
+        try:
+            report = build(args, box, pbf, temporary)
+        except ValueError as exc:
+            ap.error(str(exc))
+        temporary.rename(root)
+    Path(str(root) + '.build.json').write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding='utf-8')
+    print(json.dumps(report, indent=1, ensure_ascii=False))
+
+
+def build(args, box, pbf, root):
+    t0 = time.time()
     with osmium.io.Reader(str(pbf)) as reader:
         header = reader.header()
         as_of = header.get('osmosis_replication_timestamp') or header.get('timestamp') or ''
-    h = Region(box, args.prefer, args.search_language)
-    h.apply_file(str(pbf), locations=True, idx='flex_mem')
-    if not h.feats:
-        ap.error('No map features found inside the selected bounds.')
-    root.mkdir(parents=True)
     geo = root / 'derived' / 'geo'
     geo.mkdir(parents=True)
-    print('read', len(h.feats), 'features', len(h.pois), 'help points', len(h.places), 'places',
-          len(h.coast), 'coast ways', round(time.time() - t0), 's', flush=True)
 
     # ---- national.sqlite holds the rows; map.sqlite is the same tables with none, as in a state map
     schema = '''PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;
@@ -438,16 +460,21 @@ def main():
       CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);'''
     dst = sqlite3.connect(geo / 'national.sqlite')
     dst.executescript(schema)
-    fid = 0
-    count = {}
-    order = {'water': 0, 'wet': 0, 'beach': 1, 'land': 1, 'waterway': 2, 'rail': 2, 'road': 3, 'bldg': 4, 'place': 5}
-    for layer, cls, name, minz, parts in sorted(h.feats, key=lambda f: order[f[0]]):
-        if layer == 'bldg' and args.no_buildings:
-            continue
-        fid += 1
-        dst.execute('INSERT INTO feat VALUES (?,?,?,?,?,?)', (fid, layer, cls, name, minz, pack(parts)))
-        dst.execute('INSERT INTO feat_idx VALUES (?,?,?,?,?,?,?)', (fid, *bounds(parts), minz, 30))
-        count[layer] = count.get(layer, 0) + 1
+    features = Features(dst)
+    h = Region(box, args.prefer, features, args.search_language, buildings=not args.no_buildings)
+    index = 'sparse_file_array,' + str(root / 'osm-nodes.idx') if args.disk_index else 'flex_mem'
+    try:
+        h.apply_file(str(pbf), locations=True, idx=index)
+    except BaseException:
+        dst.close()
+        raise
+    if args.disk_index:
+        (root / 'osm-nodes.idx').unlink(missing_ok=True)
+    if not features.total:
+        dst.close()
+        raise ValueError('No map features found inside the selected bounds.')
+    print('read', features.total, 'features', len(h.pois), 'help points', len(h.places), 'places',
+          len(h.coast), 'coast ways', round(time.time() - t0), 's', flush=True)
     # the sea, cut to the box; closed coastline rings inside the box are islands, drawn as land on top
     cs = chains(h.coast)
     pieces = [piece for closed, pts in cs if not closed for piece in clip_line(pts, box)]
@@ -456,10 +483,7 @@ def main():
     for layer, group in (('ocean', rings), ('island', islands)):
         for ring in group:
             flat = [v for p in ring for v in p]
-            fid += 1
-            dst.execute('INSERT INTO feat VALUES (?,?,?,?,?,?)', (fid, layer, layer, None, 0, pack([flat])))
-            dst.execute('INSERT INTO feat_idx VALUES (?,?,?,?,?,?,?)', (fid, *bounds([flat]), 0, 30))
-            count[layer] = count.get(layer, 0) + 1
+            features.add(layer, layer, None, 0, [flat])
     seen = set()
     pid = 0
     kinds = {}
@@ -471,7 +495,7 @@ def main():
         pid += 1
         dst.execute('INSERT INTO poi VALUES (?,?,?,?,?)', (pid, cls, label, lon, lat))
         kinds[cls] = kinds.get(cls, 0) + 1
-    status = {'state': 'complete', 'stage': 'ready', 'features': fid}
+    status = {'state': 'complete', 'stage': 'ready', 'features': features.total}
     meta = [('source', f'OpenStreetMap contributors, via {pbf.name} (ODbL 1.0)'), ('data_as_of', as_of),
             ('bounds', ','.join(f'{v:.6f}' for v in box)), ('region', args.id), ('region_name', args.name)]
     # no build time in the files: the same extract and options give the same bytes, so a checksum can be compared
@@ -515,19 +539,19 @@ def main():
     file_digests = {rel: sha256(root / rel) for rel in files}
     (root / 'map-set.json').write_text(json.dumps(
         {'name': args.id, 'title': args.name, 'kind': 'region', 'bounds': box,
-         'data_as_of': as_of, 'revision': file_digests['derived/geo/national.sqlite'][:16],
+         'data_as_of': as_of, 'revision': file_digests['derived/geo/national.sqlite'][:16], 'buildings': 'bldg' in features.layers,
          'files': files, 'bytes': sum(files.values())}, indent=1, ensure_ascii=False),
         encoding='utf-8')
     report = {
         'id': args.id, 'name': args.name, 'bbox': box, 'label_names': args.prefer,
         'source': {'file': pbf.name, 'url': args.source, 'bytes': pbf.stat().st_size, 'sha256': sha256(pbf), 'data_as_of': as_of,
                    'licence': 'ODbL 1.0', 'attribution': '© OpenStreetMap contributors'},
-        'features': count, 'help_points': dict(sorted(kinds.items())), 'help_points_total': pid, 'place_finder_rows': nplaces,
+        'features': features.layers, 'help_points': dict(sorted(kinds.items())), 'help_points_total': pid, 'place_finder_rows': nplaces,
         'files': {rel: {'bytes': size, 'sha256': file_digests[rel]} for rel, size in files.items()},
-        'not_built': ['addresses', 'terrain', 'crops', 'buildings.sqlite (outlines are in national.sqlite)', 'water.sqlite', 'atlas.sqlite'],
+        'not_built': ['addresses', 'terrain', 'crops', 'water.sqlite', 'atlas.sqlite',
+                      'building footprints' if args.no_buildings else 'buildings.sqlite (outlines are in national.sqlite)'],
         'built': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'seconds': round(time.time() - t0)}
-    Path(str(root) + '.build.json').write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding='utf-8')
-    print(json.dumps(report, indent=1, ensure_ascii=False))
+    return report
 
 
 if __name__ == '__main__':

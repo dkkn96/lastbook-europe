@@ -27,6 +27,7 @@ except ValueError:
 MODEL_URL = BASE + '/v1/chat/completions'
 MODELS_URL = BASE + '/v1/models'
 MODEL = os.environ.get('SURVIVAL_MODEL', 'deepseek-v4.1-flash')
+MODEL_LABEL = os.environ.get('SURVIVAL_MODEL_LABEL') or MODEL
 # Some servers' thinking models (Ollama's gemma4) spend a whole round's tokens thinking at 'low'; 'none' answers straight away.
 REASONING_EFFORT = os.environ.get('SURVIVAL_REASONING_EFFORT', 'low')
 MAX_ROUNDS = 2  # tool rounds; then the model must answer with what it has
@@ -83,7 +84,7 @@ def model_status():
         except Exception as e:
             _status.update(online=False, error=type(e).__name__)
         _status['at'] = time.time()
-    return {'model': MODEL, 'online': _status['online'], 'error': _status['error'], 'local': local, 'vision': True,
+    return {'model': MODEL_LABEL, 'online': _status['online'], 'error': _status['error'], 'local': local, 'vision': True,
             'index': dict(INDEX.status) if INDEX else {'state': 'off'}}
 
 
@@ -92,7 +93,10 @@ def _fts(q, limit=80, kinds=None):
     content, groups = S.query_groups(q)
     if not groups:
         return []
-    con = sqlite3.connect(ro_uri(S.library.DB), uri=True)
+    try:
+        con = sqlite3.connect(ro_uri(S.library.DB), uri=True)
+    except sqlite3.OperationalError:
+        return []
     sql = ("SELECT doc_id,page,snippet(pages,6,'','',' … ',40) FROM pages WHERE pages MATCH ? "
            "ORDER BY bm25(pages,0,6,1,1,0,0,1) LIMIT ?")
     rows = []
@@ -205,7 +209,7 @@ TOOLS = [
         'Get timestamped transcript lines from a library video, optionally around a topic, to cite a moment in it.',
         'parameters': {'type': 'object', 'properties': {'video_id': {'type': 'string'}, 'query': {'type': 'string'}}, 'required': ['video_id']}}},
     {'type': 'function', 'function': {'name': 'lookup_place', 'description':
-        'Find a place (town, ZIP code, named place) in the offline gazetteer, and optionally the nearest help points (hospital, clinic, pharmacy, fire_station, police, drinking_water, toilet, shelter, community_centre, supermarket) from the offline Southern California map.',
+        'Find a town or named place in the installed offline map and optionally list nearby help points (hospital, clinic, pharmacy, fire_station, police, drinking_water, toilet, shelter, community_centre, supermarket).',
         'parameters': {'type': 'object', 'properties': {'query': {'type': 'string'},
             'nearby': {'type': 'string', 'description': 'Comma-separated kinds of help point to list near the place'}}, 'required': ['query']}}},
 ]
@@ -317,7 +321,7 @@ def run_tool(name, args, sess, extra_msgs):
         kinds = [c.strip() for c in str(args.get('nearby') or '').split(',') if c.strip() in S.HELP]
         if kinds and pl[0]['onMap']:
             for h in S.near(pl[0]['lat'], pl[0]['lon'], kinds, 3):
-                k = sess.add({'kind': 'place', 'title': h['name'] or h['label'], 'publisher': 'OpenStreetMap (data as of 25 Oct 2026)', 'lat': h['lat'], 'lon': h['lon'],
+                k = sess.add({'kind': 'place', 'title': h['name'] or h['label'], 'publisher': 'OpenStreetMap', 'lat': h['lat'], 'lon': h['lon'],
                               'excerpt': f"{h['label']} · {h['km']} km {h['dir']} of {pl[0]['name']} (straight line)"})
                 lines.append(f"[{k}] {h['label']}: {h['name'] or '(no name recorded)'} — {h['km']} km {h['dir']} (straight-line)")
         return 'Offline map data (may be outdated; does not show closures or damage):\n' + '\n'.join(lines), {'query': q, 'count': len(pl)}

@@ -4,7 +4,7 @@
   PYTHONDONTWRITEBYTECODE=1 <venv python> -B app/tests/test_bridge.py [-v]
 
 Uses the made-up library in derived/app-build/testdata (no model) and a stub for chat. Never packaged."""
-import faulthandler, hashlib, json, os, shutil, socket, statistics, subprocess, sys, threading, time, types, unittest
+import faulthandler, hashlib, json, os, shutil, socket, statistics, subprocess, sys, tempfile, threading, time, types, unittest
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -748,6 +748,14 @@ class Both:
 
 
 class AssistantStaysHere(unittest.TestCase):
+    def test_map_chat_can_start_without_a_library_search_index(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            missing = Path(folder) / 'search.sqlite'
+            with patch.object(server.library, 'DB', missing):
+                self.assertEqual(assistant._fts('Courmayeur'), [])
+            self.assertFalse(missing.exists())
+
     def test_only_loopback_addresses(self):
         for good, out in (('http://127.0.0.1:19443', 'http://127.0.0.1:19443'), ('http://127.0.0.1:1/', 'http://127.0.0.1:1'), ('http://[::1]:80', 'http://[::1]:80'), ('http://localhost:9', 'http://127.0.0.1:9')):
             self.assertEqual(assistant.loopback_base(good), out)

@@ -1563,9 +1563,10 @@ def map_info():
     meta = dict(db.execute('SELECT key,value FROM meta').fetchall()) if db else {}
     region = regional_map()
     if region:
+        layers = 'Offline streets, buildings, water and named places' if region.get('buildings', True) else 'Offline streets, water and named places'
         return {**map_contents(), 'bounds': region['bounds'], 'region': region['title'],
                 'meta': meta, 'aerial': False, 'version': data_version(),
-                'datasets': [{'label': region['title'], 'status': 'Offline streets, buildings, water and named places'},
+                'datasets': [{'label': region['title'], 'status': layers},
                              {'label': 'OpenStreetMap contributors · ODbL 1.0',
                               'status': region.get('data_as_of') or 'Snapshot date unavailable'}]}
     geo = []
