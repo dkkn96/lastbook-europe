@@ -1,0 +1,76 @@
+name: Build Italy map release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release tag
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: italy-map-${{ inputs.release_tag }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      SOURCE_URL: https://download.geofabrik.de/europe/italy-261116.osm.pbf
+      SOURCE_SHA256: 739b71ed19770aa46cae00472d163a8ab76ac5307eab6580e145e4fde4f88268
+    steps:
+      - name: Check out the exact source commit
+        run: |
+          git init
+          git fetch --depth=1 "https://github.com/$GITHUB_REPOSITORY.git" "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+
+      - name: Read the reference build report from the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.-]+)?$ ]]
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern IT-ALL.build.json --dir "$RUNNER_TEMP/italy-reference"
+
+      - name: Fetch and verify the dated OpenStreetMap extract
+        run: |
+          df -h "$RUNNER_TEMP"
+          mkdir -p "$RUNNER_TEMP/italy-source"
+          curl --fail --silent --show-error --location --retry 4 \
+            --output "$RUNNER_TEMP/italy-source/italy-261116.osm.pbf" "$SOURCE_URL"
+          printf '%s  %s\n' "$SOURCE_SHA256" "$RUNNER_TEMP/italy-source/italy-261116.osm.pbf" | sha256sum --check
+          python3 -m venv "$RUNNER_TEMP/map-venv"
+          "$RUNNER_TEMP/map-venv/bin/python" -m pip install osmium==4.3.2
+
+      - name: Build and verify the map offline
+        run: |
+          python="$RUNNER_TEMP/map-venv/bin/python"
+          "$python" tools/build_region_map.py "$RUNNER_TEMP/italy-source/italy-261116.osm.pbf" \
+            --id IT-ALL --name Italia --bbox 6.55,35.43,18.62,47.14 \
+            --search-language it --search-language de --search-language fr --search-language sl \
+            --disk-index --no-buildings --source "$SOURCE_URL" --out "$RUNNER_TEMP/italy-build"
+          rm "$RUNNER_TEMP/italy-source/italy-261116.osm.pbf"
+          actual="$RUNNER_TEMP/italy-build/IT-ALL.build.json"
+          reference="$RUNNER_TEMP/italy-reference/IT-ALL.build.json"
+          fields='{id, bbox, source, features, help_points, help_points_total, place_finder_rows}'
+          diff -u <(jq -S "$fields" "$reference") <(jq -S "$fields" "$actual")
+          "$python" tools/check_region_map.py "$RUNNER_TEMP/italy-build/IT-ALL" --engine \
+            --near 41.903,12.496 --find Roma --find Palermo --find Cagliari --find Lampedusa
+          "$python" tools/pack_region_map.py "$RUNNER_TEMP/italy-build/IT-ALL" --out "$RUNNER_TEMP/italy-assets"
+          test "$(stat -c %s "$RUNNER_TEMP/italy-assets/Lastbook-Map-IT-ALL.zip")" -lt 2147483648
+
+      - name: Upload to the existing draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$RUNNER_TEMP/italy-assets/Lastbook-Map-IT-ALL.zip"
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$RUNNER_TEMP/italy-assets/Lastbook-Map-IT-ALL.json" "$RUNNER_TEMP/italy-build/IT-ALL.build.json"
