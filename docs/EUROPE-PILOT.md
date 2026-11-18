@@ -1,6 +1,6 @@
 # Lastbook Europe pilot
 
-The pilot covers Valle d’Aosta / Vallée d’Aoste, Italy. It has offline streets, building footprints, water, named places and points such as pharmacies. The place index includes Italian and French names where OpenStreetMap records them. The snapshot has no street-address index, elevation tiles or route planner. A region replaces the active map set when Lastbook restarts.
+Lastbook Europe has two offline maps: [Italy](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.2) and [Valle d’Aosta / Vallée d’Aoste](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.1). Both include streets, water, named places and points of interest such as pharmacies. The Valle d’Aosta pack also includes building footprints. The maps have no street-address index, elevation tiles or route planner. The selected region becomes the active map when Lastbook restarts.
 
 ## Open the pilot
 
