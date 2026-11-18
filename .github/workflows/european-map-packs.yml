@@ -14,9 +14,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: european-map-packs-${{ inputs.release_tag }}
-
 jobs:
   plan:
     runs-on: ubuntu-24.04
@@ -50,9 +47,11 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: write
+    concurrency:
+      group: european-map-${{ inputs.release_tag }}-${{ matrix.code }}
     strategy:
       fail-fast: false
-      max-parallel: 14
+      max-parallel: 8
       matrix:
         code: ${{ fromJSON(needs.plan.outputs.codes) }}
     env:
@@ -73,11 +72,15 @@ jobs:
       - name: Download and verify the national extract
         run: |
           mkdir -p "$RUNNER_TEMP/source"
-          source_url=$(jq -er --arg code "$COUNTRY" '.[$code].source' tools/european_countries.json)
-          [[ "$source_url" =~ ^https://download\.geofabrik\.de/[a-z0-9/-]+-latest\.osm\.pbf$ ]]
-          md5=$(curl --fail --silent --show-error --location --retry 2 "$source_url.md5" | awk 'NR == 1 {print $1}')
+          source_url=$(jq -er --arg code "$COUNTRY" '.[$code].snapshot.source // .[$code].source' tools/european_countries.json)
+          [[ "$source_url" =~ ^https://download\.geofabrik\.de/[a-z0-9/-]+-(latest|[0-9]{6})\.osm\.pbf$ ]]
+          fetch=(curl --fail --silent --show-error --location --retry 4 --retry-connrefused --connect-timeout 15)
+          md5=$(jq -r --arg code "$COUNTRY" '.[$code].snapshot.md5 // empty' tools/european_countries.json)
+          if [ -z "$md5" ]; then
+            md5=$("${fetch[@]}" "$source_url.md5" | awk 'NR == 1 {print $1}')
+          fi
           [[ "$md5" =~ ^[a-f0-9]{32}$ ]]
-          actual_url=$(curl --fail --silent --show-error --location --retry 2 \
+          actual_url=$("${fetch[@]}" \
             --write-out '%{url_effective}' --output "$RUNNER_TEMP/source/snapshot.osm.pbf" "$source_url")
           printf '%s  %s\n' "$md5" "$RUNNER_TEMP/source/snapshot.osm.pbf" | md5sum --check
           [[ "$actual_url" =~ ^https://download\.geofabrik\.de/[a-z0-9/-]+[-][a-z0-9]+\.osm\.pbf$ ]]
