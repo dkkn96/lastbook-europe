@@ -1,0 +1,111 @@
+name: Build European country maps
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release tag (maps-europe-YYYYMMDD)
+        required: true
+        type: string
+      countries:
+        description: Space-separated country codes to build (empty builds all)
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: european-map-packs-${{ inputs.release_tag }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      codes: ${{ steps.countries.outputs.codes }}
+    steps:
+      - name: Check out the source
+        run: |
+          git init
+          git fetch --depth=1 "https://github.com/$GITHUB_REPOSITORY.git" "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Select countries
+        id: countries
+        env:
+          REQUESTED_COUNTRIES: ${{ inputs.countries }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          configs = json.loads(Path('tools/european_countries.json').read_text())
+          codes = os.environ['REQUESTED_COUNTRIES'].split() or list(configs)
+          if not set(codes) <= configs.keys() or len(codes) != len(set(codes)):
+              raise SystemExit('Use each supported country code at most once.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as result:
+              print('codes=' + json.dumps(codes), file=result)
+          PY
+
+  build:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      max-parallel: 14
+      matrix:
+        code: ${{ fromJSON(needs.plan.outputs.codes) }}
+    env:
+      COUNTRY: ${{ matrix.code }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Check out the source
+        run: |
+          git init
+          git fetch --depth=1 "https://github.com/$GITHUB_REPOSITORY.git" "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Check the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^maps-europe-[0-9]{8}$ ]]
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+      - name: Download and verify the national extract
+        run: |
+          mkdir -p "$RUNNER_TEMP/source"
+          source_url=$(jq -er --arg code "$COUNTRY" '.[$code].source' tools/european_countries.json)
+          [[ "$source_url" =~ ^https://download\.geofabrik\.de/[a-z0-9/-]+-latest\.osm\.pbf$ ]]
+          md5=$(curl --fail --silent --show-error --location --retry 2 "$source_url.md5" | awk 'NR == 1 {print $1}')
+          [[ "$md5" =~ ^[a-f0-9]{32}$ ]]
+          actual_url=$(curl --fail --silent --show-error --location --retry 2 \
+            --write-out '%{url_effective}' --output "$RUNNER_TEMP/source/snapshot.osm.pbf" "$source_url")
+          printf '%s  %s\n' "$md5" "$RUNNER_TEMP/source/snapshot.osm.pbf" | md5sum --check
+          [[ "$actual_url" =~ ^https://download\.geofabrik\.de/[a-z0-9/-]+[-][a-z0-9]+\.osm\.pbf$ ]]
+          file="$RUNNER_TEMP/source/${actual_url##*/}"
+          mv "$RUNNER_TEMP/source/snapshot.osm.pbf" "$file"
+          printf 'PBF=%s\nPBF_URL=%s\n' "$file" "$actual_url" >> "$GITHUB_ENV"
+          df -h "$RUNNER_TEMP"
+      - name: Build and verify the offline map
+        run: |
+          python3 -m venv "$RUNNER_TEMP/map-venv"
+          python="$RUNNER_TEMP/map-venv/bin/python"
+          "$python" -m pip install osmium==4.3.2
+          region="$COUNTRY-ALL"
+          entry=$(jq -ce --arg code "$COUNTRY" '.[$code]' tools/european_countries.json)
+          name=$(jq -r .name <<< "$entry")
+          bbox=$(jq -r '.bbox | join(",")' <<< "$entry")
+          city=$(jq -r '.check[0]' <<< "$entry")
+          near=$(jq -r '.check[1:] | join(",")' <<< "$entry")
+          "$python" tools/build_region_map.py "$PBF" --id "$region" --name "$name" "--bbox=$bbox" \
+            --disk-index --no-buildings --search-language en --source "$PBF_URL" --out "$RUNNER_TEMP/build"
+          rm "$PBF"
+          "$python" tools/check_region_map.py "$RUNNER_TEMP/build/$region" --engine "--near=$near" --find "$city"
+          "$python" tools/pack_region_map.py "$RUNNER_TEMP/build/$region" --out "$RUNNER_TEMP/assets" --release-parts
+      - name: Upload the verified country to the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "$RUNNER_TEMP"/assets/Lastbook-Map-"$COUNTRY"-ALL.zip*
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$RUNNER_TEMP/assets/Lastbook-Map-$COUNTRY-ALL.json" "$RUNNER_TEMP/build/$COUNTRY-ALL.build.json"

@@ -1,0 +1,632 @@
+{
+  "DE": {
+    "name": "Germany",
+    "source": "https://download.geofabrik.de/europe/germany-latest.osm.pbf",
+    "bbox": [
+      5.864,
+      47.265,
+      15.051,
+      55.148
+    ],
+    "check": [
+      "Berlin",
+      52.52,
+      13.405
+    ]
+  },
+  "FR": {
+    "name": "France (Europe)",
+    "source": "https://download.geofabrik.de/europe/france-latest.osm.pbf",
+    "bbox": [
+      -6.938,
+      41.238,
+      9.9,
+      51.429
+    ],
+    "check": [
+      "Paris",
+      48.8566,
+      2.3522
+    ]
+  },
+  "GB": {
+    "name": "United Kingdom",
+    "source": "https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf",
+    "bbox": [
+      -14.859,
+      49.419,
+      2.642,
+      61.136
+    ],
+    "check": [
+      "London",
+      51.5074,
+      -0.1278
+    ]
+  },
+  "ES": {
+    "name": "Spain (mainland and Balearic Islands)",
+    "source": "https://download.geofabrik.de/europe/spain-latest.osm.pbf",
+    "bbox": [
+      -9.78,
+      35.263,
+      5.099,
+      44.149
+    ],
+    "check": [
+      "Madrid",
+      40.4168,
+      -3.7038
+    ]
+  },
+  "CH": {
+    "name": "Switzerland",
+    "source": "https://download.geofabrik.de/europe/switzerland-latest.osm.pbf",
+    "bbox": [
+      5.954,
+      45.816,
+      10.496,
+      47.812
+    ],
+    "check": [
+      "Bern",
+      46.9481,
+      7.4474
+    ]
+  },
+  "AT": {
+    "name": "Austria",
+    "source": "https://download.geofabrik.de/europe/austria-latest.osm.pbf",
+    "bbox": [
+      9.526,
+      46.369,
+      17.165,
+      49.025
+    ],
+    "check": [
+      "Vienna",
+      48.2082,
+      16.3738
+    ]
+  },
+  "SI": {
+    "name": "Slovenia",
+    "source": "https://download.geofabrik.de/europe/slovenia-latest.osm.pbf",
+    "bbox": [
+      13.305,
+      45.42,
+      16.601,
+      46.88
+    ],
+    "check": [
+      "Ljubljana",
+      46.0569,
+      14.5058
+    ]
+  },
+  "HR": {
+    "name": "Croatia",
+    "source": "https://download.geofabrik.de/europe/croatia-latest.osm.pbf",
+    "bbox": [
+      13.089,
+      42.164,
+      19.46,
+      46.558
+    ],
+    "check": [
+      "Zagreb",
+      45.815,
+      15.9819
+    ]
+  },
+  "PT": {
+    "name": "Portugal",
+    "source": "https://download.geofabrik.de/europe/portugal-latest.osm.pbf",
+    "bbox": [
+      -31.6,
+      29.7,
+      -6.179,
+      42.164
+    ],
+    "check": [
+      "Lisbon",
+      38.7223,
+      -9.1393
+    ]
+  },
+  "BE": {
+    "name": "Belgium",
+    "source": "https://download.geofabrik.de/europe/belgium-latest.osm.pbf",
+    "bbox": [
+      2.34,
+      49.494,
+      6.411,
+      51.599
+    ],
+    "check": [
+      "Brussels",
+      50.8503,
+      4.3517
+    ]
+  },
+  "NL": {
+    "name": "Netherlands",
+    "source": "https://download.geofabrik.de/europe/netherlands-latest.osm.pbf",
+    "bbox": [
+      2.936,
+      50.747,
+      7.231,
+      54.018
+    ],
+    "check": [
+      "Amsterdam",
+      52.3676,
+      4.9041
+    ]
+  },
+  "PL": {
+    "name": "Poland",
+    "source": "https://download.geofabrik.de/europe/poland-latest.osm.pbf",
+    "bbox": [
+      13.99,
+      48.986,
+      24.162,
+      55.229
+    ],
+    "check": [
+      "Warsaw",
+      52.2297,
+      21.0122
+    ]
+  },
+  "AD": {
+    "name": "Andorra",
+    "source": "https://download.geofabrik.de/europe/andorra-latest.osm.pbf",
+    "bbox": [
+      1.412,
+      42.427,
+      1.788,
+      42.658
+    ],
+    "check": [
+      "Andorra la Vella",
+      42.5063,
+      1.5218
+    ]
+  },
+  "AL": {
+    "name": "Albania",
+    "source": "https://download.geofabrik.de/europe/albania-latest.osm.pbf",
+    "bbox": [
+      18.896,
+      39.627,
+      21.063,
+      42.664
+    ],
+    "check": [
+      "Tirana",
+      41.3275,
+      19.8187
+    ]
+  },
+  "BA": {
+    "name": "Bosnia and Herzegovina",
+    "source": "https://download.geofabrik.de/europe/bosnia-herzegovina-latest.osm.pbf",
+    "bbox": [
+      15.715,
+      42.552,
+      19.627,
+      45.279
+    ],
+    "check": [
+      "Sarajevo",
+      43.8563,
+      18.4131
+    ]
+  },
+  "BG": {
+    "name": "Bulgaria",
+    "source": "https://download.geofabrik.de/europe/bulgaria-latest.osm.pbf",
+    "bbox": [
+      22.348,
+      41.226,
+      29.189,
+      44.218
+    ],
+    "check": [
+      "Sofia",
+      42.6977,
+      23.3219
+    ]
+  },
+  "BY": {
+    "name": "Belarus",
+    "source": "https://download.geofabrik.de/europe/belarus-latest.osm.pbf",
+    "bbox": [
+      23.174,
+      51.234,
+      32.77,
+      56.174
+    ],
+    "check": [
+      "Minsk",
+      53.9,
+      27.5667
+    ]
+  },
+  "CY": {
+    "name": "Cyprus",
+    "source": "https://download.geofabrik.de/europe/cyprus-latest.osm.pbf",
+    "bbox": [
+      31.952,
+      34.233,
+      34.962,
+      36.004
+    ],
+    "check": [
+      "Nicosia",
+      35.1856,
+      33.3823
+    ]
+  },
+  "CZ": {
+    "name": "Czechia",
+    "source": "https://download.geofabrik.de/europe/czech-republic-latest.osm.pbf",
+    "bbox": [
+      12.084,
+      48.542,
+      18.864,
+      51.065
+    ],
+    "check": [
+      "Prague",
+      50.0755,
+      14.4378
+    ]
+  },
+  "DK": {
+    "name": "Denmark",
+    "source": "https://download.geofabrik.de/europe/denmark-latest.osm.pbf",
+    "bbox": [
+      7.701,
+      54.44,
+      15.655,
+      58.063
+    ],
+    "check": [
+      "Copenhagen",
+      55.6761,
+      12.5683
+    ]
+  },
+  "EE": {
+    "name": "Estonia",
+    "source": "https://download.geofabrik.de/europe/estonia-latest.osm.pbf",
+    "bbox": [
+      20.851,
+      57.497,
+      28.215,
+      59.998
+    ],
+    "check": [
+      "Tallinn",
+      59.437,
+      24.7536
+    ]
+  },
+  "FI": {
+    "name": "Finland",
+    "source": "https://download.geofabrik.de/europe/finland-latest.osm.pbf",
+    "bbox": [
+      19.024,
+      59.287,
+      31.616,
+      70.1
+    ],
+    "check": [
+      "Helsinki",
+      60.1699,
+      24.9384
+    ]
+  },
+  "GR": {
+    "name": "Greece",
+    "source": "https://download.geofabrik.de/europe/greece-latest.osm.pbf",
+    "bbox": [
+      18.97,
+      34.591,
+      29.657,
+      41.75
+    ],
+    "check": [
+      "Athens",
+      37.9838,
+      23.7275
+    ]
+  },
+  "HU": {
+    "name": "Hungary",
+    "source": "https://download.geofabrik.de/europe/hungary-latest.osm.pbf",
+    "bbox": [
+      16.108,
+      45.732,
+      22.907,
+      48.59
+    ],
+    "check": [
+      "Budapest",
+      47.4979,
+      19.0402
+    ]
+  },
+  "IE": {
+    "name": "Ireland and Northern Ireland",
+    "source": "https://download.geofabrik.de/europe/ireland-and-northern-ireland-latest.osm.pbf",
+    "bbox": [
+      -14.403,
+      49.6,
+      -5.059,
+      56.866
+    ],
+    "check": [
+      "Dublin",
+      53.3498,
+      -6.2603
+    ]
+  },
+  "IS": {
+    "name": "Iceland",
+    "source": "https://download.geofabrik.de/europe/iceland-latest.osm.pbf",
+    "bbox": [
+      -25.7,
+      62.845,
+      -12.417,
+      67.501
+    ],
+    "check": [
+      "Reykjavík",
+      64.1466,
+      -21.9426
+    ]
+  },
+  "LI": {
+    "name": "Liechtenstein",
+    "source": "https://download.geofabrik.de/europe/liechtenstein-latest.osm.pbf",
+    "bbox": [
+      9.471,
+      47.047,
+      9.637,
+      47.272
+    ],
+    "check": [
+      "Vaduz",
+      47.141,
+      9.5209
+    ]
+  },
+  "LT": {
+    "name": "Lithuania",
+    "source": "https://download.geofabrik.de/europe/lithuania-latest.osm.pbf",
+    "bbox": [
+      20.618,
+      53.892,
+      26.839,
+      56.454
+    ],
+    "check": [
+      "Vilnius",
+      54.6872,
+      25.2797
+    ]
+  },
+  "LU": {
+    "name": "Luxembourg",
+    "source": "https://download.geofabrik.de/europe/luxembourg-latest.osm.pbf",
+    "bbox": [
+      5.733,
+      49.445,
+      6.533,
+      50.185
+    ],
+    "check": [
+      "Luxembourg",
+      49.6117,
+      6.1319
+    ]
+  },
+  "LV": {
+    "name": "Latvia",
+    "source": "https://download.geofabrik.de/europe/latvia-latest.osm.pbf",
+    "bbox": [
+      19.733,
+      55.661,
+      28.256,
+      58.095
+    ],
+    "check": [
+      "Riga",
+      56.9496,
+      24.1052
+    ]
+  },
+  "MC": {
+    "name": "Monaco",
+    "source": "https://download.geofabrik.de/europe/monaco-latest.osm.pbf",
+    "bbox": [
+      7.408,
+      43.483,
+      7.596,
+      43.753
+    ],
+    "check": [
+      "Monaco",
+      43.7384,
+      7.4246
+    ]
+  },
+  "MD": {
+    "name": "Moldova",
+    "source": "https://download.geofabrik.de/europe/moldova-latest.osm.pbf",
+    "bbox": [
+      26.612,
+      45.461,
+      30.193,
+      48.494
+    ],
+    "check": [
+      "Chișinău",
+      47.0105,
+      28.8638
+    ]
+  },
+  "ME": {
+    "name": "Montenegro",
+    "source": "https://download.geofabrik.de/europe/montenegro-latest.osm.pbf",
+    "bbox": [
+      18.172,
+      41.616,
+      20.359,
+      43.563
+    ],
+    "check": [
+      "Podgorica",
+      42.4304,
+      19.2594
+    ]
+  },
+  "MK": {
+    "name": "North Macedonia",
+    "source": "https://download.geofabrik.de/europe/macedonia-latest.osm.pbf",
+    "bbox": [
+      20.446,
+      40.847,
+      23.041,
+      42.38
+    ],
+    "check": [
+      "Skopje",
+      41.9981,
+      21.4254
+    ]
+  },
+  "MT": {
+    "name": "Malta",
+    "source": "https://download.geofabrik.de/europe/malta-latest.osm.pbf",
+    "bbox": [
+      14.0,
+      35.519,
+      14.857,
+      36.333
+    ],
+    "check": [
+      "Valletta",
+      35.8997,
+      14.5146
+    ]
+  },
+  "NO": {
+    "name": "Norway",
+    "source": "https://download.geofabrik.de/europe/norway-latest.osm.pbf",
+    "bbox": [
+      -11.369,
+      57.553,
+      35.528,
+      81.052
+    ],
+    "check": [
+      "Oslo",
+      59.9139,
+      10.7522
+    ]
+  },
+  "RO": {
+    "name": "Romania",
+    "source": "https://download.geofabrik.de/europe/romania-latest.osm.pbf",
+    "bbox": [
+      20.241,
+      43.612,
+      30.279,
+      48.27
+    ],
+    "check": [
+      "Bucharest",
+      44.4268,
+      26.1025
+    ]
+  },
+  "RS": {
+    "name": "Serbia",
+    "source": "https://download.geofabrik.de/europe/serbia-latest.osm.pbf",
+    "bbox": [
+      18.808,
+      42.229,
+      23.011,
+      46.193
+    ],
+    "check": [
+      "Belgrade",
+      44.8176,
+      20.4633
+    ]
+  },
+  "SE": {
+    "name": "Sweden",
+    "source": "https://download.geofabrik.de/europe/sweden-latest.osm.pbf",
+    "bbox": [
+      10.541,
+      55.026,
+      24.225,
+      69.067
+    ],
+    "check": [
+      "Stockholm",
+      59.3293,
+      18.0686
+    ]
+  },
+  "SK": {
+    "name": "Slovakia",
+    "source": "https://download.geofabrik.de/europe/slovakia-latest.osm.pbf",
+    "bbox": [
+      16.83,
+      47.726,
+      22.571,
+      49.619
+    ],
+    "check": [
+      "Bratislava",
+      48.1486,
+      17.1077
+    ]
+  },
+  "UA": {
+    "name": "Ukraine",
+    "source": "https://download.geofabrik.de/europe/ukraine-latest.osm.pbf",
+    "bbox": [
+      22.132,
+      44.008,
+      40.239,
+      52.387
+    ],
+    "check": [
+      "Kyiv",
+      50.4501,
+      30.5234
+    ]
+  },
+  "XK": {
+    "name": "Kosovo",
+    "source": "https://download.geofabrik.de/europe/kosovo-latest.osm.pbf",
+    "bbox": [
+      20.013,
+      41.854,
+      21.794,
+      43.278
+    ],
+    "check": [
+      "Pristina",
+      42.6629,
+      21.1655
+    ]
+  }
+}
