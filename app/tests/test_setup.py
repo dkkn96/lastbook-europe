@@ -252,6 +252,23 @@ class Allowlist(unittest.TestCase):
         self.assertNotIn('ProxyHandler', src)
         self.assertNotIn('set_tunnel', src)
 
+    def test_europe_maps_stay_pinned_and_have_separate_download_hosts(self):
+        setup_manifest = manifest.Manifest(remote=None, map_directory=ROOT / 'app')
+        before = setup_manifest.map('IT-ALL')
+        f = before['files'][0]
+        self.assertTrue(before['available'])
+        self.assertIsNotNone(setup_manifest.map('IT-23'))
+        upstream = manifest.validate({'version': 1, 'maps': [{'id': 'IT-ALL', 'available': False}]})
+        self.assertIsNotNone(upstream)
+        setup_manifest.current = manifest.merge(setup_manifest.current, upstream)
+        self.assertEqual(setup_manifest.map('IT-ALL'), before)
+        self.assertFalse(download.url_allowed(f['url']))
+        self.assertIsNone(manifest.validate({'version': 1, 'maps': [before]}))
+        self.assertTrue(download.url_allowed(f['url'], download.MAP_RELEASE_HOSTS))
+        self.assertFalse(download.url_allowed('https://github.com:8443/x', download.MAP_RELEASE_HOSTS))
+        self.assertFalse(download.url_allowed('https://downloads.lastbook.org/x', download.MAP_RELEASE_HOSTS))
+        self.assertNotIn('url', setup_manifest.public()['maps'][0]['files'][0])
+
     def test_only_module_with_connections(self):
         """In engine/setup/, only download.py touches http.client, socket connections or urllib.request."""
         for p in (ROOT / 'engine' / 'setup').glob('*.py'):

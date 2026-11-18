@@ -2,6 +2,8 @@
 
 Lastbook Europe adds offline maps for all of Italy and Valle d’Aosta / Vallée d’Aoste. It offers a choice of local Gemma models and supports a local model server for Qwen. Use the [Lastbook Europe setup guide](docs/EUROPE-PILOT.md) with the [Italy map release](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.2).
 
+**Mac preview.** Download the [Apple Silicon disk image](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.3) and choose a map during setup.
+
 Lastbook is an offline survival library for Mac, Windows and Linux. It puts manuals, videos, encyclopedias, an offline map and
 short practical guides on one computer. After setup, it works offline. The desktop sidebar opens Videos, Map and Chat.
 Chat answers questions using the library and links to its sources.
@@ -11,7 +13,7 @@ Website: <https://lastbook.org>. Contact: hello@lastbook.org.
 > Lastbook’s original code and documentation are licensed under the [MIT License](LICENSE).
 > Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
-## Release status
+## Upstream release status
 
 | Platform | Version | Status |
 |---|---|---|
@@ -134,14 +136,13 @@ test code, a network call outside setup's downloader, a web address in our own p
 **macOS (Apple Silicon, needs [uv](https://github.com/astral-sh/uv)):**
 
 ```bash
-bash packaging/llm/build_llm_macos.sh    # optional: the local AI runner, llama.cpp at a pinned tag, Metal
-bash packaging/build_app_macos.sh        # Lastbook.app
+bash packaging/llm/build_llm_macos.sh    # bundled local AI runner
+bash packaging/build_mac_python.sh      # CPython 3.11.18 for macOS 14
+bash packaging/build_app_macos.sh        # Lastbook-Europe-macOS-arm64.dmg
 ```
 
-The build uses CPython 3.11.18 exactly (earlier 3.11 releases lack the block on the compromised eMudhra CA keys). It makes
-an ad-hoc signed app. Release copies are then signed with the project's Developer ID in a separate release step; its keys
-and settings are not in this repository. The build reads the release manifest from a release folder under
-`derived/release/`, which is not in this repository either; see `packaging/release_manifest.py`.
+The Mac preview uses CPython 3.11.18 and an ad-hoc code signature. Setup starts with the public library manifest and the
+fork's pinned map choices. See the [Mac setup guide](docs/EUROPE-PILOT.md) for installation.
 
 **Windows (64-bit, in Git Bash):**
 

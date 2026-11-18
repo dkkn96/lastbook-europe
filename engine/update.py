@@ -49,6 +49,14 @@ def _mac_bundle():
     return None
 
 
+def _mac_info():
+    bundle = _mac_bundle() if sys.platform == 'darwin' else None
+    if bundle is not None:
+        with (bundle / 'Contents' / 'Info.plist').open('rb') as f:
+            return plistlib.load(f)
+    return {}
+
+
 def _windows_exe_version(path):
     import ctypes
     from ctypes import wintypes as wt
@@ -69,9 +77,8 @@ def _windows_exe_version(path):
 def app_version():
     """This app's version as 'X.Y.Z', or None outside a built app (LASTBOOK_VERSION stands in for tests)."""
     try:
-        if sys.platform == 'darwin' and _mac_bundle():
-            with open(_mac_bundle() / 'Contents' / 'Info.plist', 'rb') as f:
-                return str(plistlib.load(f).get('CFBundleShortVersionString') or '') or None
+        if info := _mac_info():
+            return str(info.get('CFBundleShortVersionString') or '') or None
         if sys.platform == 'win32' and getattr(sys, 'frozen', False):
             return _windows_exe_version(sys.executable)
         if sys.platform.startswith('linux') and getattr(sys, 'frozen', False):    # the .deb's /opt/lastbook/VERSION
@@ -197,6 +204,9 @@ class Updater:
             conn.close()
 
     def _check(self):
+        if self.product and _mac_info().get('CFBundleIdentifier') == 'org.lastbookeurope.desktop':
+            return self._set(state='error', code='fork_release',
+                             message='Check the Lastbook Europe releases at github.com/dkkn96/lastbook-europe/releases.')
         try:
             status, data = self._fetch()
         except download.Failed as f:

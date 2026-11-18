@@ -45,7 +45,7 @@ def app_folders():
     if sys.platform == 'win32':
         local = Path(os.environ.get('LOCALAPPDATA') or Path.home() / 'AppData' / 'Local')
         return Path(os.environ.get('APPDATA') or Path.home() / 'AppData' / 'Roaming') / 'Lastbook', local / 'Lastbook'
-    mine = Path.home() / 'Library' / 'Application Support' / 'Lastbook'
+    mine = Path.home() / 'Library' / 'Application Support' / ('Lastbook Europe' if FROZEN else 'Lastbook')
     return mine, mine
 
 

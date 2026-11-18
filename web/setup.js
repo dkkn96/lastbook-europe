@@ -89,9 +89,9 @@
     return Boolean(pack.revision && pack.revision !== current.content_revision);
   }
 
-  /* state maps (docs/SETUP-API.md, State maps). The person picks the state; Lastbook never looks for where it is */
+  /* Regional packs are shown first. The person chooses the area. */
   const maps = () => ((S.manifest && S.manifest.maps) || []).slice().sort((a, b) =>
-    Number(Boolean(b.local)) - Number(Boolean(a.local)) || a.title.localeCompare(b.title));
+    Number(b.kind === 'region') - Number(a.kind === 'region') || a.title.localeCompare(b.title));
   const mapById = id => maps().find(m => m.id === id);
   const mapName = id => id === 'us' ? 'the whole US' : mapById(id)?.title || (cur()?.map === id && cur()?.map_title) || id;
   /* the detailed map the library will have once the chosen pack is in: the person's state map, or the one the pack carries */
@@ -299,7 +299,7 @@
       hint += ' Street-address search is unavailable for this state.';
     }
     box.innerHTML = `<h2>${ico('map')}Your local map</h2>
-      <p class="s-mapnote">Local streets, buildings, water and places to get help. Available offline.</p>
+      <p class="s-mapnote">Local streets, water and places to get help. Available offline.</p>
       ${now === 'us' ? '<p class="s-mapnote">The All library includes a map of the US.</p>' : ''}
       <label class="s-maplabel" for="mapSel">Choose a map</label>
       <select id="mapSel" class="s-select" aria-describedby="mapHint"><option value=""${selected ? '' : ' selected'}>Keep the library’s map</option>${opts}</select>

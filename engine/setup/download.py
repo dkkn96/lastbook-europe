@@ -31,6 +31,7 @@ ALLOWED_HOSTS = frozenset({
     'cas-bridge.xethub.hf.co',
 })
 ALLOWED_SUFFIXES = ('.hf.co',)      # Hugging Face's download hosts (cas-bridge.xethub.hf.co and its siblings)
+MAP_RELEASE_HOSTS = frozenset({'github.com', 'release-assets.githubusercontent.com'})
 MAX_REDIRECTS = 5
 TIMEOUT = 30                        # seconds without a byte before the connection counts as broken
 CHUNK = 1024 * 1024
@@ -81,7 +82,7 @@ def url_allowed(url, allowed=None):
         return False
     if u.scheme != 'https' or not u.hostname or u.username or u.password:
         return False
-    if allowed is None and port not in (None, 443):
+    if (allowed is None or allowed is MAP_RELEASE_HOSTS) and port not in (None, 443):
         return False
     return host_allowed(u.hostname, allowed)
 
@@ -94,10 +95,14 @@ def roots_path():
     return here
 
 
-def tls_context():
+def map_release_roots():
+    return roots_path().with_name('map-release-roots.pem')
+
+
+def tls_context(allowed=None):
     """TLS 1.2 or later, hostname checked, and trust in the roots of roots.pem only: never the system's store (see
     packaging/setup_roots.py for why and which). With the file missing, nothing is downloaded."""
-    roots = roots_path()
+    roots = map_release_roots() if allowed is MAP_RELEASE_HOSTS else roots_path()
     if not roots.is_file():
         raise Failed('network', 'This copy of Lastbook is missing its list of trusted download servers, so it cannot download. '
                                 'Download Lastbook again.')
@@ -241,7 +246,7 @@ class Download:
         if meta and (meta.get('sha256') != self.sha256 or meta.get('size') != self.size):
             self.discard()       # left by another version of this file
             meta = {}
-        ctx = self.context or tls_context()
+        ctx = self.context or tls_context(self.allowed)
         start = self.done_bytes()
         if start and not meta.get('etag'):
             start = 0            # nothing to tell the server which file those bytes came from

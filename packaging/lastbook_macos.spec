@@ -41,6 +41,10 @@ datas += [(str(LLM / 'LICENSE-llama.cpp.txt'), 'llm')]
 datas += [(str(SHIP / 'setup' / 'manifest-v1.json'), 'setup')]   # what first-run setup can install
 hidden += collect_submodules('engine.setup')
 datas += [(str(ROOT / 'engine' / 'setup' / 'roots.pem'), 'engine/setup')]   # the only roots setup's downloader trusts
+datas += [(str(ROOT / 'engine' / 'setup' / 'map-release-roots.pem'), 'engine/setup')]
+datas += [(str(ROOT / 'LICENSE'), '.')]
+datas += [(str(Path(sysconfig.get_path('stdlib')) / 'LICENSE.txt'), '.')]
+datas += files('.', '.', '*.txt')
 for package in ('libzim', 'pypdfium2', 'pypdfium2_raw'):   # loaded only when a ZIM or PDF is first opened, and they carry native libraries
     d, b, h = collect_all(package)
     datas += d
@@ -64,9 +68,10 @@ pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [('X utf8', None, 'OPTION')], exclude_binaries=True, name='Lastbook', console=False, argv_emulation=False, target_arch='arm64', codesign_identity=None, entitlements_file=None)
 coll = COLLECT(exe, a.binaries, a.datas, name='Lastbook')
 ICON = Path(SPECPATH) / 'Lastbook.icns'
-app = BUNDLE(coll, name='Lastbook.app', icon=str(ICON) if ICON.exists() else None, bundle_identifier='local.lastbook.desktop', version='1.1.11', info_plist={
-    'CFBundleDisplayName': 'Lastbook',
-    'CFBundleName': 'Lastbook',
+app = BUNDLE(coll, name='Lastbook.app', icon=str(ICON) if ICON.exists() else None, bundle_identifier='org.lastbookeurope.desktop', version='0.1.0', info_plist={
+    'CFBundleDisplayName': 'Lastbook Europe',
+    'CFBundleName': 'Lastbook Europe',
+    'CFBundleVersion': '3',
     'LSApplicationCategoryType': 'public.app-category.reference',
     'LSMinimumSystemVersion': '14.0',   # what numpy's binaries ask for
     'LSRequiresNativeExecution': True,

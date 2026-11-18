@@ -24,6 +24,7 @@ from engine.local_models import read_state
 
 from . import download, hardware, install
 from .manifest import Manifest
+from .europe_maps import URLS as EUROPE_MAP_URLS
 
 DATA_NAME = install.DATA_NAME
 WORK_SUFFIX = '.setup'
@@ -938,9 +939,10 @@ class Setup:
                                       need_bytes=still, free_bytes=free)
         while True:
             self._set(it, 'downloading')
+            allowed = download.MAP_RELEASE_HOSTS if f['url'] in EUROPE_MAP_URLS else self.allowed
             d = download.Download(f['url'], dest, f['size'], f['sha256'], control,
                                   lambda done, total, phase: tracker.progress(offset + done, it['bytes_total'], phase),
-                                  allowed=self.allowed, context=self.context)
+                                  allowed=allowed, context=self.context)
             try:
                 return d.run(), True
             except download.BadChecksum:
@@ -1007,7 +1009,7 @@ class Setup:
         staged = work / 'unpack-map'
         for path, _ in got:
             install.check_zip(path, mp['installed_bytes'], install.map_member)
-        if mp.get('local'):
+        if mp.get('kind') == 'region':
             receipt = staged / 'archives.json'
             archives = {f['name']: f['sha256'] for f in mp['files']}
             try:

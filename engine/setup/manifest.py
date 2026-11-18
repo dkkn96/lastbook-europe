@@ -8,7 +8,7 @@ import sys
 import threading
 from pathlib import Path
 
-from . import download
+from . import download, europe_maps
 from engine.local_models import MODELS, manifest_entry
 
 REMOTE = 'https://downloads.lastbook.org/manifest-v1.json'
@@ -161,6 +161,7 @@ class Manifest:
 
     def __init__(self, bundled=None, remote=REMOTE, allowed=None, context=None, map_directory=None):
         self.current = bundled if bundled is not None else load_bundled()
+        self.include_europe_maps = bundled is None and download.map_release_roots().is_file()
         if bundled is None:
             known = {x['id'] for x in self.current['models']}
             self.current['models'] += [manifest_entry(model) for model in MODELS if model['id'] not in known]
@@ -200,8 +201,12 @@ class Manifest:
 
     def maps(self):
         hosted = self.current.get('maps', [])
+        local = list(local_maps(self.map_directory)) if self.map_directory else []
+        if self.include_europe_maps:
+            local_by_id = {x['id']: x for x in local if x['available']}
+            europe = [local_by_id.get(x['id'], x) for x in europe_maps.entries()]
+            hosted = europe + [x for x in hosted if x['id'] not in europe_maps.IDS]
         hosted_ids = {x['id'] for x in hosted}
-        local = local_maps(self.map_directory) if self.map_directory else ()
         return hosted + [x for x in local if x['id'] not in hosted_ids]
 
     def address_index(self, state):

@@ -137,6 +137,11 @@ def main():
     roots = [a.app / 'Contents' / d / 'engine' / 'setup' / 'roots.pem' for d in ('Resources', 'Frameworks')]
     if not any(r.is_file() for r in roots):    # setup's downloader trusts only these roots; without them it downloads nothing
         problems.append('missing from the package: engine/setup/roots.pem')
+    if not any(r.with_name('map-release-roots.pem').is_file() for r in roots):
+        problems.append('missing from the package: engine/setup/map-release-roots.pem')
+    for version, paths in minos.items():
+        if tuple(map(int, version.split('.'))) > (14, 0, 0):
+            problems.append(f'macOS {version} required by {", ".join(paths)}')
     print(f'files {n_files}, native binaries {n_macho}, modules looked inside {n_mods}')
     print(f'remote_storage string: {remote_hits or "nowhere"} (the module itself is refused above)')
     print(f'/Users/... strings: { {u: w[:3] for u, w in user_paths.items()} or "none"}')

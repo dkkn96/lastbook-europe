@@ -2,7 +2,13 @@
 
 Lastbook Europe has two offline maps: [Italy](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.2) and [Valle d’Aosta / Vallée d’Aoste](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.1). Both include streets, water, named places and points of interest such as pharmacies. The Valle d’Aosta pack also includes building footprints. The maps have no street-address index, elevation tiles or route planner. The selected region becomes the active map when Lastbook restarts.
 
-## Open the pilot
+## Install on Mac
+
+Download the [Lastbook Europe disk image](https://github.com/dkkn96/lastbook-europe/releases/tag/v0.1.0-alpha.3) for Apple Silicon and macOS 14 or later. Open it, drag **Lastbook Europe.app** to **Applications**, and launch the copied app. This preview uses an ad-hoc code signature. Apple has not notarized it. If macOS blocks it, see [Apple's guidance on opening apps](https://support.apple.com/en-us/102445).
+
+Choose a library and an offline map in setup. The map downloads directly from GitHub and the app verifies its SHA-256 before installing it. The Italy pack downloads 1.17 GB and takes 3.03 GB once installed. Valle d’Aosta downloads about 14 MB and takes 38 MB. A fresh library is a separate download. To use an existing library, select it in setup. Open **Library and local AI → Choose map** to switch areas later. One map is active per library.
+
+## Run from source
 
 On Apple Silicon, create an isolated Python environment and run the desktop app from source.
 
@@ -12,7 +18,11 @@ derived/europe-venv/bin/python -m pip install -r packaging/requirements_macos.tx
 LASTBOOK_PROFILE_DIR="$PWD/derived/europe-profile" derived/europe-venv/bin/python app/main.py
 ```
 
-Put the ZIP and matching JSON in `derived/regions/packs/` before opening Setup. The whole Italy pack uses `Lastbook-Map-IT-ALL.zip` and `Lastbook-Map-IT-ALL.json`. The Valle d’Aosta pack uses `IT-23`. You can use a different folder with `LASTBOOK_MAP_PACKS`. Select the region in **Choose a map**, then choose the library and model independently. To use a library you already have, open a copy with `app/main.py --data /path/to/LastbookData`. Open **Library and local AI**, choose the map and restart when prompted. Use a copy if you want to preserve the active map in another Lastbook installation.
+Setup offers the published map packs automatically. To use a map archive you already have, put its ZIP and matching JSON in `derived/regions/packs/`, or set `LASTBOOK_MAP_PACKS` to another directory. To use a library you already have, open a copy with `app/main.py --data /path/to/LastbookData`. Open **Library and local AI**, choose the map and restart when prompted. Use a copy if you want to preserve the active map in another Lastbook installation.
+
+## Build the Mac disk image
+
+On Apple Silicon with Xcode command line tools, CMake and uv, run `bash packaging/llm/build_llm_macos.sh` to build the bundled runner. Run `bash packaging/build_mac_python.sh` to build Python 3.11.18 and its dependencies for macOS 14. Then run `bash packaging/build_app_macos.sh`. The script prints the path to the verified disk image under `derived/app-build/mac/`.
 
 The AI selector offers Gemma 4 26B A4B and Gemma 4 E4B. The downloaded weights are approximately 17 GB and 5 GB respectively. The source checkout needs the [Lastbook llama.cpp runner](../packaging/llm/) to answer with a model. Search and map use are available without weights. The E4B installation and switching logic was tested with fixture files. The full E4B file has not yet been tested on Metal in this fork.
 

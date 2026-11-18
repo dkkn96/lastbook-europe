@@ -8,6 +8,7 @@ which trusts only engine/setup/roots.pem. A host that fails means its chain move
 roots.pem (packaging/setup_roots.py) before shipping. It also checks that a site whose chain ends in a root outside the set is
 refused, which shows the system's trust store is not being used.
 """
+import argparse
 import http.client
 import ssl
 import sys
@@ -30,12 +31,19 @@ def handshake(host, ctx):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--europe-maps', action='store_true')
+    options = parser.parse_args()
     ctx = download.tls_context()
     print(f'roots: {download.roots_path()} ({ctx.cert_store_stats()["x509_ca"]} trusted)')
     bad = []
-    for h in HOSTS:
+    release_context = download.tls_context(download.MAP_RELEASE_HOSTS) if options.europe_maps else None
+    hosts = [(host, ctx) for host in HOSTS]
+    if release_context:
+        hosts += [(host, release_context) for host in sorted(download.MAP_RELEASE_HOSTS)]
+    for h, host_context in hosts:
         try:
-            print(f'  ok   {h} (HTTP {handshake(h, ctx)})')
+            print(f'  ok   {h} (HTTP {handshake(h, host_context)})')
         except ssl.SSLCertVerificationError as e:
             bad.append(h)
             print(f'  FAIL {h}: {e.verify_message}')
