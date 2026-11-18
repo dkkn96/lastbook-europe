@@ -1438,8 +1438,17 @@ def places(q, limit=20, near=None):
             size[k] = 2 if hit[0] is None else hit[0]
         return size[k]
     home = near or home_area()
-    rows.sort(key=lambda r: (norm(r[0]) != ql, not norm(r[0]).startswith(ql), r[5] > 2 and norm(r[0]) == ql and importance(r),
-                             -round(near_bonus(home, r[3], r[4])), r[5]))
+    if region:
+        def regional_order(row):
+            label = norm(row[0])
+            names = re.split(r'/|\s+[-–—]\s+', row[0]) + (row[2] or '').split(' · ')[:-1]
+            exact = label == ql or any(norm(name) == ql for name in names)
+            return not exact, not (exact or label.startswith(ql)), row[5], -round(near_bonus(home, row[3], row[4]))
+
+        rows.sort(key=regional_order)
+    else:
+        rows.sort(key=lambda r: (norm(r[0]) != ql, not norm(r[0]).startswith(ql), r[5] > 2 and norm(r[0]) == ql and importance(r),
+                                 -round(near_bonus(home, r[3], r[4])), r[5]))
     seen, out = set(), []
     for name, kind, detail, lat, lon, rank, src in rows:
         k = (name.lower(), round(lat, 2), round(lon, 2))

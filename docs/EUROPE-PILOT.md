@@ -12,7 +12,7 @@ derived/europe-venv/bin/python -m pip install -r packaging/requirements_macos.tx
 LASTBOOK_PROFILE_DIR="$PWD/derived/europe-profile" derived/europe-venv/bin/python app/main.py
 ```
 
-Put both pilot files, `Lastbook-Map-IT-23.zip` and `Lastbook-Map-IT-23.json`, in `derived/regions/packs/` before opening Setup. You can use a different folder with `LASTBOOK_MAP_PACKS`. Select the region in **Choose a map**, then choose the library and model independently. To use a library you already have, open a copy with `app/main.py --data /path/to/LastbookData`. Open **Library and local AI**, choose the map and restart when prompted. Use a copy if you want to preserve the active map in another Lastbook installation.
+Put the ZIP and matching JSON in `derived/regions/packs/` before opening Setup. The whole Italy pack uses `Lastbook-Map-IT-ALL.zip` and `Lastbook-Map-IT-ALL.json`. The Valle d’Aosta pack uses `IT-23`. You can use a different folder with `LASTBOOK_MAP_PACKS`. Select the region in **Choose a map**, then choose the library and model independently. To use a library you already have, open a copy with `app/main.py --data /path/to/LastbookData`. Open **Library and local AI**, choose the map and restart when prompted. Use a copy if you want to preserve the active map in another Lastbook installation.
 
 The AI selector offers Gemma 4 26B A4B and Gemma 4 E4B. The downloaded weights are approximately 17 GB and 5 GB respectively. The source checkout needs the [Lastbook llama.cpp runner](../packaging/llm/) to answer with a model. Search and map use are available without weights. The E4B installation and switching logic was tested with fixture files. The full E4B file has not yet been tested on Metal in this fork.
 
