@@ -282,18 +282,20 @@
       const a = addressById(m.id), included = mapIncluded(m, now);
       const addressIncluded = ((cur() || {}).address_indexes || []).includes(m.id);
       const off = !included && m.available === false;
-      const bytes = (included ? 0 : packDl(m)) + (a && a.available !== false && !addressIncluded ? packDl(a) : 0);
+      const local = m.local || foundFor('map', m.id);
+      const bytes = (included || local ? 0 : packDl(m)) + (a && a.available !== false && !addressIncluded ? packDl(a) : 0);
       const details = off ? (m.local ? 'file unavailable' : 'coming later') : included && !bytes ? 'installed' :
-        m.local ? 'local archive' : bytes ? size(bytes) + ' download' : 'included';
+        local ? 'local archive' : bytes ? size(bytes) + ' download' : 'included';
       return `<option value="${esc(m.id)}"${selected === m.id ? ' selected' : ''}${off ? ' disabled' : ''}>${esc(m.title)} — ${details}</option>`;
     }).join('');
     const sel = options.find(m => m.id === selected), a = addressAdds(), included = mapIncluded(sel, now);
-    const bytes = (sel && !included && !sel.local ? packDl(sel) : 0) + (a ? packDl(a) : 0);
+    const local = sel && (sel.local || foundFor('map', sel.id));
+    const bytes = (sel && !included && !local ? packDl(sel) : 0) + (a ? packDl(a) : 0);
     const disk = (sel && !included ? sel.installed_bytes || 0 : 0) + (a ? a.installed_bytes || 0 : 0);
     let hint = !sel ? 'You can keep the map included with your library.' : bytes ? `${size(bytes)} download · ${size(disk)} on disk` : 'This map is already included.';
     if (sel?.kind === 'region') {
       hint = sel.available === false && !included ? 'The local archive is missing or incomplete.' :
-        (included ? 'This map is installed.' : sel.local ? `${size(disk)} on disk · install from a local archive.` : hint)
+        (included ? 'This map is installed.' : local ? `${size(disk)} on disk · install from a local archive.` : hint)
         + ' Find towns and places offline.';
     } else if (sel && addresses().length && addressById(selected)?.available !== true) {
       hint += ' Street-address search is unavailable for this state.';

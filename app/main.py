@@ -235,6 +235,8 @@ def relaunch():
     # The engine's current folder and startup flags must not override the
     # library switch staged by setup on the next normal launch.
     os.environ.pop('LASTBOOK_DATA', None)
+    if FROZEN and sys.platform == 'darwin':
+        os.environ['PYINSTALLER_RESET_ENVIRONMENT'] = '1'
     print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} setup finished: starting again', flush=True)
     if sys.platform == 'win32':
         import subprocess
