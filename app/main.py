@@ -35,6 +35,9 @@ ASK = 'Lastbook needs its library folder, called LastbookData. Unzip the library
 
 def app_folders():
     """(settings, this computer's app data): roaming and local on Windows, one place on a Mac, XDG's config and data folders on Linux."""
+    if profile := os.environ.get('LASTBOOK_PROFILE_DIR'):
+        folder = Path(profile).expanduser().resolve()
+        return folder, folder
     if sys.platform.startswith('linux'):
         home = Path.home()
         return (Path(os.environ.get('XDG_CONFIG_HOME') or home / '.config') / 'Lastbook',

@@ -839,6 +839,32 @@ class Switching(Base):
 
 
 class Manage(Base):
+    def test_model_choice_adds_second_model_and_preserves_the_first(self):
+        target = self.parent / 'LastbookData'
+        (target / 'library-data').mkdir(parents=True)
+        (target / 'library-data/catalog.json').write_text('{}')
+        (target / 'models').mkdir()
+        current_model = target / 'models/model.gguf'
+        current_model.write_bytes(self.model)
+        light = b'light model fixture'
+        self.files.data['light.gguf'] = light
+        mf = self.manifest()
+        mf.current['models'].append({'id': 'light', 'title': 'Light Gemma', 'file': 'light.gguf',
+                                     'url': f'{self.base}/light.gguf', 'size': len(light), 'sha256': sha(light),
+                                     'memory_bytes': 1024, 'available': True})
+        s = self.setup('manage', current=target, manifest=mf)
+        self.assertEqual(s.current_info()['model'], 'gemma')
+        self.assertEqual(s.start(ai='light')['items'][0]['id'], 'light')
+        self.assertEqual(self.wait(s)['state'], 'done')
+        self.assertEqual(current_model.read_bytes(), self.model)
+        self.assertEqual((target / 'models/light.gguf').read_bytes(), light)
+        self.assertEqual(set(s.current_info()['installed_models']), {'gemma', 'light'})
+        self.assertEqual(self.marked, [(str(target / 'models/light.gguf'), sha(light))])
+        state = target / 'derived/llm/state.json'
+        state.parent.mkdir(parents=True)
+        state.write_text('{"enabled": true, "model_id": "light"}')
+        self.assertEqual(self.setup('manage', current=target, manifest=mf).current_info()['model'], 'light')
+
     """Repair, removing the AI, and the folder picker's answer."""
 
     def installed_library(self):
@@ -930,6 +956,64 @@ def make_map(path, state='CA', extra=None):
 
 
 class Maps(Base):
+    def test_local_region_switches_an_all_library_without_network(self):
+        folder = self.tmp / 'regional-packs'
+        folder.mkdir()
+        source = folder / 'Lastbook-Map-IT-23.zip'
+        files = make_map(source)
+        with zipfile.ZipFile(source) as old:
+            contents = {name: old.read(name) for name in old.namelist()}
+        info = json.loads(contents['LastbookData/map-set.json'])
+        info.update(name='IT-23', title='Valle d’Aosta', kind='region', bounds=[6.75, 45.4, 8.06, 46.02])
+        contents['LastbookData/map-set.json'] = json.dumps(info).encode()
+        with zipfile.ZipFile(source, 'w') as z:
+            for name, data in contents.items():
+                z.writestr(name, data)
+        digest = sha(source.read_bytes())
+        catalog = {'version': 1, 'id': 'IT-23', 'title': info['title'],
+                   'installed_bytes': sum(map(len, contents.values())),
+                   'file': {'name': source.name, 'size': source.stat().st_size, 'sha256': digest}}
+        source.with_suffix('.json').write_text(json.dumps(catalog))
+        mf = manifest.Manifest(bundled=self.manifest().current, remote=None, map_directory=folder)
+        cur = self.parent / 'LastbookData'
+        (cur / 'library-data').mkdir(parents=True)
+        (cur / 'library-data/catalog.json').write_text('{}')
+        (cur / 'pack.json').write_text('{"name": "all", "map": "us"}')
+        s = self.setup('manage', current=cur, manifest=mf)
+        self.assertEqual(s.state()['manifest']['maps'][0]['id'], 'IT-23')
+        self.assertEqual(s.current_info()['map'], 'us')
+        self.assertEqual(s.start(map_id='IT-23')['items'][0]['source'], 'found')
+        self.assertEqual(self.wait(s)['state'], 'done')
+        self.assertEqual(install.map_name(cur), 'us')
+        lib, note = api.startup(self.settings)
+        self.assertFalse(note.get('error'))
+        self.assertEqual(install.map_name(lib), 'IT-23')
+        self.assertEqual((lib / 'derived/geo/map.sqlite').read_bytes(), files['derived/geo/map.sqlite'])
+        self.assertEqual(sha(source.read_bytes()), digest)
+        self.assertEqual(self.files.log, [])
+
+    def test_bad_local_map_checksum_does_not_download_or_change_map(self):
+        folder = self.tmp / 'regional-packs'
+        folder.mkdir()
+        source = folder / 'Lastbook-Map-IT-23.zip'
+        source.write_bytes(b'map bytes')
+        source.with_suffix('.json').write_text(json.dumps({
+            'version': 1, 'id': 'IT-23', 'title': 'Valle d’Aosta', 'installed_bytes': 100,
+            'file': {'name': source.name, 'size': source.stat().st_size, 'sha256': '0' * 64},
+        }))
+        mf = manifest.Manifest(bundled=self.manifest().current, remote=None, map_directory=folder)
+        cur = self.parent / 'LastbookData'
+        (cur / 'library-data').mkdir(parents=True)
+        (cur / 'library-data/catalog.json').write_text('{}')
+        s = self.setup('manage', current=cur, manifest=mf)
+        s.start(map_id='IT-23')
+        job = self.wait(s)
+        self.assertEqual(job['state'], 'failed')
+        self.assertEqual(job['items'][0]['error']['code'], 'local_map_file')
+        self.assertEqual(self.files.log, [])
+        self.assertEqual(install.map_name(cur), 'base')
+        self.assertEqual(source.read_bytes(), b'map bytes')
+
     def map_manifest(self, extra=None):
         files = make_map(self.tmp / 'Lastbook-Map-CA.zip', extra=extra)
         data = (self.tmp / 'Lastbook-Map-CA.zip').read_bytes()

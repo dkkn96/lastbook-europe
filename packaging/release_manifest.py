@@ -5,8 +5,8 @@
                                               [--measure /path/to/the.gguf] [--small-from derived/release/1.0.0-20261104-1507]
 
 Packs come from derived/release/manifest-v1.json, which session publish-packs writes for each verified pack. The model entry comes
-from llm_local.py's constants (file, size, SHA-256, revision), so the two cannot drift. memory_bytes is llama.cpp's measure of
-the model and its context (device + host bytes from lastbook-llm --measure): MEASURED_MEMORY below, or measured again with --measure.
+from the supported model registry. memory_bytes is llama.cpp's measure of
+the model and its context (device + host bytes from lastbook-llm --measure).
 --small-from builds the Small pack's entry from a release folder's SHA256SUMS.txt when the packs file has none (before
 publish-packs has written it). Every URL must be on an allowed host (engine/setup/download.py) or the build stops.
 The packaging spec bundles the output as setup/manifest-v1.json.
@@ -23,19 +23,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT)]
 import llm_local                                   # noqa: E402  (constants only: importing it starts nothing)
+from engine.local_models import MODELS, manifest_entry  # noqa: E402
 from engine.setup import download, manifest        # noqa: E402
 
-MEASURED_MEMORY = 18_160_150_464 + 867_233_792     # Mac Studio M3 Ultra, 12 Nov 2026, --ctx 16384: device_bytes + host_bytes
 BASE = 'https://downloads.lastbook.org'     # live since 12 Nov 2026; packs and maps are accepted from this host only
 SMALL_SUMMARY = 'The essentials: first aid, water, food, shelter and repair, with the maps of this area.'
-
-
-def model_entry(memory_bytes):
-    rev = re.search(r'revision ([0-9a-f]{40})', llm_local.SOURCE).group(1)
-    repo = llm_local.SOURCE.split(',')[0].strip()
-    return {'id': 'gemma-4-26b-a4b', 'title': 'Gemma 4 26B A4B', 'file': llm_local.FILE,
-            'url': f'https://huggingface.co/{repo}/resolve/{rev}/{llm_local.FILE}?download=true',
-            'size': llm_local.SIZE, 'sha256': llm_local.SHA256, 'memory_bytes': int(memory_bytes), 'available': True}
 
 
 def measure(gguf):
@@ -86,13 +78,18 @@ def main():
         sys.exit(f'no packs: {a.packs} is missing or empty (publish-packs writes it); --small-from builds Small alone')
     out = {'version': 1, 'published': src.get('published') or time.strftime('%Y-%m-%d'), 'packs': packs, 'maps': list(src.get('maps') or []),
            'address_indexes': list(src.get('address_indexes') or []),
-           'models': [model_entry(measure(a.measure) if a.measure else MEASURED_MEMORY)]}
+           'models': [manifest_entry(m) for m in MODELS]}
+    if a.measure:
+        model = next((m for m in out['models'] if m['file'] == Path(a.measure).name), None)
+        if not model:
+            ap.error('--measure must name a supported model file')
+        model['memory_bytes'] = measure(a.measure)
     if manifest.validate(out) is None:
         bad = [f.get('url') for p in packs for f in p.get('files', []) if not download.url_allowed(f.get('url'))]
         sys.exit('the manifest does not pass engine/setup/manifest.validate' + (f'; addresses not allowed: {bad}' if bad else ''))
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text(json.dumps(out, indent=1) + '\n', encoding='utf-8')
-    print(f'{a.out}: {len(out["maps"])} maps, {len(packs)} packs ({", ".join(p["id"] + ("" if p.get("available") else " later") for p in packs)}), 1 model')
+    print(f'{a.out}: {len(out["maps"])} maps, {len(packs)} packs, {len(out["models"])} models')
 
 
 if __name__ == '__main__':

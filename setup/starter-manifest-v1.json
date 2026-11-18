@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "published": "2026-11-13",
+  "packs": [
+    {
+      "id": "small",
+      "title": "Small",
+      "summary": "Essential first aid, water, food, shelter and repair knowledge.",
+      "revision": "2026-11-13-small-v2",
+      "records": 314,
+      "installed_bytes": 7691309976,
+      "available": true,
+      "map": "base",
+      "files": [
+        {
+          "name": "Lastbook-Small-20261113.zip",
+          "url": "https://downloads.lastbook.org/Lastbook-Small-20261113.zip",
+          "size": 7691528852,
+          "sha256": "bfe8b0b66d898cac18b7f979dd5e560b8fd653f03244b6186e0436306cf96291",
+          "kind": "zip"
+        }
+      ]
+    }
+  ],
+  "models": [],
+  "maps": []
+}

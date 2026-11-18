@@ -20,6 +20,8 @@ import uuid
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
+from engine.local_models import read_state
+
 from . import download, hardware, install
 from .manifest import Manifest
 
@@ -260,13 +262,20 @@ class Setup:
                 revision = ''
         except (OSError, ValueError, AttributeError):
             pack, revision = None, ''
-        m = self.manifest.model()
-        model = None
-        if m:
+        installed = []
+        for m in self.manifest.models():
             p = self.current / 'models' / m['file']
-            if p.is_file() and p.stat().st_size == m['size']:
-                model = m['id']
-        return {'folder': str(self.current), 'pack': pack, 'content_revision': revision, 'map_bytes': install.map_bytes(self.current), 'model': model, 'map': install.map_name(self.current), 'address_indexes': self.address_indexes(), 'old': self._settings().get('old', [])}
+            try:
+                if p.is_file() and p.stat().st_size == m['size']:
+                    installed.append(m['id'])
+            except OSError:
+                continue
+        preferred = read_state(self.current).get('model_id')
+        model = preferred if preferred in installed else next(iter(installed), None)
+        local_map = install.map_set(self.current) or {}
+        return {'folder': str(self.current), 'pack': pack, 'content_revision': revision, 'map_bytes': install.map_bytes(self.current), 'model': model,
+                'installed_models': installed, 'map': install.map_name(self.current), 'map_title': local_map.get('title'), 'map_kind': local_map.get('kind'),
+                'address_indexes': self.address_indexes(), 'old': self._settings().get('old', [])}
 
     def address_indexes(self):
         if not self.current:
@@ -300,17 +309,19 @@ class Setup:
         for p in self.manifest.current['packs']:
             for f in p['files']:
                 files[f['name']] = ('pack', p['id'], f['size'])
-        m = self.manifest.model()
-        if m:
+        for m in self.manifest.models():
             files[m['file']] = ('model', m['id'], m['size'])
-        for kind, key in (('map', 'maps'), ('addresses', 'address_indexes')):
-            for x in self.manifest.current.get(key, []):
+        maps = self.manifest.maps()
+        for kind, entries in (('map', maps), ('addresses', self.manifest.current.get('address_indexes', []))):
+            for x in entries:
                 for f in x['files']:
                     files[f['name']] = (kind, x['id'], f['size'])
         places = [self.default_parent]
         if self.current:
             places += [self.current / 'models', self.current]
         candidates = [Path(p) for p in self.sources.values()]
+        candidates.extend(self.manifest.map_directory / x['files'][0]['name'] for x in maps
+                          if x.get('local') and x['available'])
         for place in places:
             try:
                 candidates.extend(c for c in place.iterdir() if c.name in files or (c.name.startswith('Lastbook-') and c.name.endswith('.zip')))
@@ -333,7 +344,7 @@ class Setup:
         if not m:
             return None
         for f in self.found():
-            if f['kind'] == 'model' and f.get('size_ok'):
+            if f['kind'] == 'model' and f['id'] == m['id'] and f.get('size_ok'):
                 return f['path']
         return None
 
@@ -361,6 +372,11 @@ class Setup:
         extra = [self.default_parent] + ([self.current.parent] if self.current else [])
         hw = hardware.detect(extra)
         hw['ai'] = self.ai_fit(hw)
+        models = self.manifest.models()
+        hw['model_fits'] = {m['id']: hardware.estimate_ai(hw['ram_bytes'], hw['gpus'], hw['unified_memory'], m['memory_bytes'])
+                            for m in models}
+        if models:
+            hw['model_fits'][models[0]['id']] = hw['ai']
         return hw
 
     def recommend(self, hw):
@@ -370,7 +386,8 @@ class Setup:
         free, total = hardware.disk_of(parent)
         model = self.manifest.model()
         need = {p['id']: install.need_bytes(p, None) for p in available}
-        map_need = {x['id']: _map_need(x, ()) for x in self.manifest.current.get('maps', []) if x['available']}
+        map_need = {x['id']: _map_need(x, [f['name'] for f in x['files']] if x.get('local') else ())
+                    for x in self.manifest.maps() if x['available']}
         if not packs:
             return {'pack': None, 'ai': False, 'folder': str(parent), 'need_bytes': need, 'why': 'No library is ready to download yet.'}
         margin = _margin(total)
@@ -395,7 +412,10 @@ class Setup:
             home_free = free
             free, margin = elsewhere['free_bytes'], _margin(elsewhere['total_bytes'])
         left = free - need[choice['id']]
-        ai = bool(model and hw['ai']['fits'] and left >= model['size'] + margin)
+        fits = hw.get('model_fits', {})
+        suggested = next((m for m in self.manifest.models() if fits.get(m['id'], hw['ai'])['fits']
+                          and left >= m['size'] + margin), None)
+        ai = suggested is not None
         if elsewhere:
             name = elsewhere.get('name') or Path(elsewhere['path']).name or elsewhere['path']
             why = (f'This computer’s own disk has {_gb(home_free)} free, not enough for any library, so {choice["title"]} goes on {name}. '
@@ -406,9 +426,11 @@ class Setup:
             why = self.default_why + ' ' + why
         if model and hw['ai']['fits'] and not ai:
             why += ' The local AI fits this computer’s memory, but not on the disk as well.'
-        elif model and not hw['ai']['fits']:
+        elif model and not ai and not hw['ai']['fits']:
             why += ' ' + hw['ai']['why']
-        return {'pack': choice['id'], 'ai': ai, 'folder': str(folder), 'need_bytes': need, 'map_need_bytes': map_need, 'address_need_bytes': {x['id']: _map_need(x, ()) for x in self.manifest.current.get('address_indexes', []) if x['available']}, 'why': why}
+        return {'pack': choice['id'], 'ai': ai, 'model': suggested['id'] if suggested else None,
+                'folder': str(folder), 'need_bytes': need, 'map_need_bytes': map_need,
+                'address_need_bytes': {x['id']: _map_need(x, ()) for x in self.manifest.current.get('address_indexes', []) if x['available']}, 'why': why}
 
     def state(self):
         self.manifest.fetch_once()
@@ -444,12 +466,12 @@ class Setup:
             same_revision = pack and (not pack.get('revision') or pack['revision'] == cur.get('content_revision', ''))
             if pack and self.mode == 'manage' and cur.get('pack') == pack['id'] and same_revision and not folder:
                 pack = None        # the same library again: only the AI is wanted
-            model = self.manifest.model() if ai else None
+            model = self.manifest.model(ai if isinstance(ai, str) else cur.get('model')) if ai else None
             if ai and not model:
                 return {'error': 'No local AI is offered for this version.', 'code': 'unavailable'}
             mp = self.manifest.map(map_id) if map_id else None
             if map_id and (not mp or not mp['available']):
-                return {'error': 'That state’s map is not available yet.', 'code': 'unavailable'}
+                return {'error': 'That map is not available yet.', 'code': 'unavailable'}
             requested_address = address_id
             address_id = address_id or map_id or (pack or {}).get('map') or cur.get('map')
             if address_id in ('base', 'us'):
@@ -466,7 +488,7 @@ class Setup:
             parent = target.parent
             if addresses and addresses['id'] in cur.get('address_indexes', []) and target == self.current:
                 addresses = None
-            if model and cur.get('model') and target == self.current:
+            if model and cur.get('model') == model['id'] and target == self.current:
                 model = None       # already here, and an upgrade in place carries it over
             if mp and not pack and cur.get('map') == mp['id']:
                 mp = None          # this state's map is the one here already
@@ -551,7 +573,7 @@ class Setup:
             pack = self.manifest.pack(cur['pack']) if cur['pack'] else None
             if not pack or not pack['available']:
                 return {'error': 'Lastbook cannot tell which library this is, so it cannot repair it. Download a library instead.', 'code': 'unavailable'}
-            model = self.manifest.model() if (ai or cur['model']) else None
+            model = self.manifest.model(cur['model'] or (ai if isinstance(ai, str) else None)) if (ai or cur['model']) else None
             parent, target = self.current.parent, self.current
             work = _work_for(target)
             srcs = {f['name']: f['path'] for f in self.found() if f.get('size_ok') and f['kind'] in ('pack', 'model')}
@@ -679,9 +701,7 @@ class Setup:
             lib = p if install.is_library(p) else p / DATA_NAME
             if not install.is_library(lib):
                 known = {f['name'] for pk in self.manifest.current['packs'] for f in pk['files']}
-                model = self.manifest.model()
-                if model:
-                    known.add(model['file'])
+                known.update(m['file'] for m in self.manifest.models())
                 inside = sorted(c for c in p.iterdir() if c.name in known and c.is_file()) if p.is_dir() else []
                 if inside:          # the person explicitly chose this folder
                     return self.use(str(inside[0]))
@@ -706,7 +726,7 @@ class Setup:
                         return {'error': 'That library is not available in this version.', 'code': 'unavailable'}
                     self.sources[name] = str(p)
                     return self.start(pk['id'], False, None, {name: str(p)}, explicit=True)
-        for x in self.manifest.current.get('maps', []):
+        for x in self.manifest.maps():
             for f in x['files']:
                 if f['name'] == name:
                     if p.stat().st_size != f['size']:
@@ -714,7 +734,7 @@ class Setup:
                     self.sources[name] = str(p)
                     if self.mode == 'manage':
                         return self.start(None, False, None, {name: str(p)}, explicit=True, map_id=x['id'])
-                    return self.public_job() or {'job': None, 'noted': True}
+                    return {'noted': True, 'map': x['id']}
         for entry in self.manifest.current.get('address_indexes', []):
             for file in entry['files']:
                 if file['name'] != name:
@@ -725,15 +745,15 @@ class Setup:
                 if self.mode == 'manage':
                     return self.start(sources={name: str(p)}, explicit=True, address_id=entry['id'])
                 return self.public_job() or {'job': None, 'noted': True}
-        m = self.manifest.model()
-        if m and name == m['file']:
+        m = next((model for model in self.manifest.models() if model['file'] == name), None)
+        if m:
             if p.stat().st_size != m['size']:
                 return {'error': f'That file is {_gb(p.stat().st_size)}, not the {_gb(m["size"])} of the model. The download may not have finished.', 'code': 'size'}
             self.sources[name] = str(p)
             if self.mode == 'manage':
-                return self.start(None, True, None, {name: str(p)}, explicit=True)
-            return self.public_job() or {'job': None, 'noted': True}
-        return {'error': 'That is not a file Lastbook knows. Choose a Lastbook library zip or the model file.', 'code': 'unknown'}
+                return self.start(None, m['id'], None, {name: str(p)}, explicit=True)
+            return {'noted': True, 'model': m['id']}
+        return {'error': 'Choose a Lastbook library, map or AI model file.', 'code': 'unknown'}
 
     def finish(self):
         with self.lock:
@@ -765,7 +785,8 @@ class Setup:
 
     def remove_ai(self):
         """Manage mode: the model file goes from the open library. The library itself is not touched."""
-        m = self.manifest.model()
+        active = (self.current_info() or {}).get('model')
+        m = self.manifest.model(active) if active else None
         if self.mode != 'manage' or not self.current or not m:
             return {'error': 'There is no local AI in this library to remove.', 'code': 'nothing'}
         with self.lock:
@@ -881,25 +902,30 @@ class Setup:
         """The file, checked against its SHA-256: one already on this computer, or a download. Returns its path."""
         tracker = _Item(it)
         name, src = f['name'], plan['sources'].get(f['name'])
-        if src and os.path.isfile(src) and name in plan.setdefault('verified', []):
+        hosted = bool(f.get('url'))
+        if hosted and src and os.path.isfile(src) and name in plan.setdefault('verified', []):
             return src, False
         explicit_use = bool(plan.get('explicit'))
         if src and os.path.isfile(src):
             self._set(it, 'verifying')
             digest = _sha256(src, control, lambda d, t: tracker.progress(offset + d, it['bytes_total'], 'verifying'))
             if digest == f['sha256']:
-                plan['verified'].append(name)
+                if hosted:
+                    plan.setdefault('verified', []).append(name)
                 return src, False
             st = os.stat(src)
             self.rejected[src] = (st.st_size, st.st_mtime_ns)
             plan['sources'].pop(name, None)       # a retry downloads it instead; the file itself is left where it is, untouched
             it['source'] = 'download'
             plan['explicit'] = False
-            if explicit_use:
+            if explicit_use and hosted:
                 folder = Path(src).parent.name or str(Path(src).parent)
                 raise download.Failed('found_mismatch', f'The {name} in {folder} doesn’t match the published file, so it was not used. '
                                                         'It was left as it is. Download it instead?', file=src)
-            print(f'setup: {src} does not match; downloading instead', flush=True)
+            if hosted:
+                print(f'setup: {src} does not match; downloading instead', flush=True)
+        if not hosted:
+            raise download.Failed('local_map_file', f'Lastbook needs an intact copy of {name}. Replace the map archive and try again.')
         dest = work / 'downloads' / name
         if not dest.exists():       # room for what is still to come (the space check at start counted a file already here as had)
             try:
@@ -981,6 +1007,18 @@ class Setup:
         staged = work / 'unpack-map'
         for path, _ in got:
             install.check_zip(path, mp['installed_bytes'], install.map_member)
+        if mp.get('local'):
+            receipt = staged / 'archives.json'
+            archives = {f['name']: f['sha256'] for f in mp['files']}
+            try:
+                previous = json.loads(receipt.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                previous = None
+            if previous != archives:
+                if staged.exists():
+                    shutil.rmtree(staged)
+                staged.mkdir()
+                install._write_json(receipt, archives)
         for path, _ in got:
             lib = install.unpack(path, staged, mp['installed_bytes'], control, lambda d, t: tracker.progress(d, t, 'unpacking'), allowed=install.map_member)
         if install.map_name(lib) != mp['id']:
@@ -1216,7 +1254,9 @@ def _default():
     global SETUP
     if SETUP is None:
         from engine import paths
-        if sys.platform == 'win32':
+        if profile := os.environ.get('LASTBOOK_PROFILE_DIR'):
+            settings = Path(profile).expanduser().resolve()
+        elif sys.platform == 'win32':
             settings = Path(os.environ.get('APPDATA') or Path.home() / 'AppData' / 'Roaming') / 'Lastbook'
         elif sys.platform.startswith('linux'):
             settings = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'Lastbook'
@@ -1229,7 +1269,7 @@ def _default():
 ROUTES = {
     ('GET', 'state'): lambda s, b: s.state(),
     ('GET', 'job'): lambda s, b: s.public_job(),
-    ('POST', 'start'): lambda s, b: s.start(b.get('pack'), bool(b.get('ai')), b.get('folder'), repair=bool(b.get('repair')), map_id=b.get('map') or None, address_id=b.get('address_id') or None),
+    ('POST', 'start'): lambda s, b: s.start(b.get('pack'), b.get('ai', False), b.get('folder'), repair=bool(b.get('repair')), map_id=b.get('map') or None, address_id=b.get('address_id') or None),
     ('POST', 'pause'): lambda s, b: s.pause(),
     ('POST', 'resume'): lambda s, b: s.resume(),
     ('POST', 'cancel'): lambda s, b: s.cancel(),

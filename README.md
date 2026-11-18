@@ -1,5 +1,7 @@
 # Lastbook
 
+This fork adds offline regional map packs and a choice of local Gemma models. The first map covers Valle d’Aosta / Vallée d’Aoste, Italy. See the [pilot setup and map build](docs/EUROPE-PILOT.md).
+
 Lastbook is an offline survival library for Mac, Windows and Linux. It puts manuals, videos, encyclopedias, an offline map and
 short practical guides on one computer. After setup, it works offline. The desktop sidebar opens Videos, Map and Chat.
 Chat answers questions using the library and links to its sources.

@@ -2,12 +2,14 @@
 from the download site when setup is opened. A fetched one is used only if it parses, says version 1 and every address in it is
 allowed (download.url_allowed)."""
 import json
+import os
 import re
 import sys
 import threading
 from pathlib import Path
 
 from . import download
+from engine.local_models import MODELS, manifest_entry
 
 REMOTE = 'https://downloads.lastbook.org/manifest-v1.json'
 SHA = re.compile(r'^[0-9a-f]{64}$')
@@ -24,6 +26,7 @@ def _from(url, hosts, allowed):
     import urllib.parse
     return (urllib.parse.urlsplit(url).hostname or '').lower() in hosts
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$')
+REGION_ID = re.compile(r'[A-Z]{2}-[A-Z0-9]{1,8}')
 
 
 def bundled_paths():
@@ -31,7 +34,8 @@ def bundled_paths():
         base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
         return [base / 'setup' / 'manifest-v1.json']
     root = Path(__file__).resolve().parents[2]
-    return [root / 'setup' / 'manifest-v1.json', root / 'derived' / 'release' / 'setup' / 'manifest-v1.json']
+    return [root / 'setup' / 'manifest-v1.json', root / 'derived' / 'release' / 'setup' / 'manifest-v1.json',
+            root / 'setup' / 'starter-manifest-v1.json']
 
 
 def _int(v):
@@ -106,6 +110,35 @@ def load_bundled(paths=None):
     return {'version': 1, 'published': '', 'packs': [], 'models': [], 'maps': []}
 
 
+def local_maps(directory):
+    """Load map-only sidecars from a local directory. They cannot add a download URL or supply a path."""
+    for sidecar in sorted(directory.glob('Lastbook-Map-*.json')):
+        try:
+            entry = json.loads(sidecar.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(entry, dict) or entry.get('version') != 1:
+            continue
+        code, title, size, file = (entry.get(k) for k in ('id', 'title', 'installed_bytes', 'file'))
+        if (not isinstance(code, str) or not REGION_ID.fullmatch(code) or not isinstance(title, str)
+                or not title.strip() or not _int(size) or not size or not isinstance(file, dict)):
+            continue
+        stem = f'Lastbook-Map-{code}'
+        name = stem + '.zip'
+        archive = directory / name
+        sha, archive_size = file.get('sha256'), file.get('size')
+        if (sidecar.name != stem + '.json' or file.get('name') != name or not isinstance(sha, str)
+                or not SHA.fullmatch(sha) or not _int(archive_size) or not archive_size):
+            continue
+        try:
+            available = archive.is_file() and archive.stat().st_size == archive_size
+        except OSError:
+            available = False
+        yield {'id': code, 'title': title, 'kind': 'region', 'local': True, 'available': available,
+               'includes': '', 'installed_bytes': size, 'download_bytes': 0,
+               'files': [{'name': name, 'size': archive_size, 'sha256': sha, 'kind': 'zip'}]}
+
+
 def merge(bundled, fetched):
     """What the app was built with stays (audit E1): for an id the bundled manifest pins (it has files, or the model's file),
     its addresses, sizes and SHA-256 are kept and the fetched copy may only change whether it is available. A fetched copy may
@@ -126,8 +159,18 @@ def merge(bundled, fetched):
 class Manifest:
     """The bundled manifest at once; a fetched one replaces it when it arrives and is newer or the same date."""
 
-    def __init__(self, bundled=None, remote=REMOTE, allowed=None, context=None):
-        self.current = bundled or load_bundled()
+    def __init__(self, bundled=None, remote=REMOTE, allowed=None, context=None, map_directory=None):
+        self.current = bundled if bundled is not None else load_bundled()
+        if bundled is None:
+            known = {x['id'] for x in self.current['models']}
+            self.current['models'] += [manifest_entry(model) for model in MODELS if model['id'] not in known]
+        configured = os.environ.get('LASTBOOK_MAP_PACKS')
+        if map_directory is None and bundled is None:
+            if configured:
+                map_directory = Path(configured).expanduser()
+            elif not getattr(sys, 'frozen', False):
+                map_directory = Path(__file__).resolve().parents[2] / 'derived' / 'regions' / 'packs'
+        self.map_directory = Path(map_directory).resolve() if map_directory is not None else None
         self.source = 'bundled'
         self.remote, self.allowed, self.context = remote, allowed, context
         self.fetching = None
@@ -153,19 +196,27 @@ class Manifest:
         return next((p for p in self.current['packs'] if p['id'] == pid), None)
 
     def map(self, mid):
-        return next((x for x in self.current.get('maps', []) if x['id'] == mid), None)
+        return next((x for x in self.maps() if x['id'] == mid), None)
+
+    def maps(self):
+        hosted = self.current.get('maps', [])
+        hosted_ids = {x['id'] for x in hosted}
+        local = local_maps(self.map_directory) if self.map_directory else ()
+        return hosted + [x for x in local if x['id'] not in hosted_ids]
 
     def address_index(self, state):
         return next((x for x in self.current.get('address_indexes', []) if x['id'] == state), None)
 
     def model(self, mid=None):
-        ms = [m for m in self.current['models'] if m['available']]
-        return next((m for m in ms if mid in (None, m['id'])), None)
+        return next((m for m in self.models() if mid in (None, m['id'])), None)
+
+    def models(self):
+        return [m for m in self.current['models'] if m['available']]
 
     def public(self):
         strip = lambda f: {k: v for k, v in f.items() if k != 'url'}
         return {'source': self.source, 'published': self.current['published'],
                 'packs': [{**p, 'files': [strip(f) for f in p['files']]} for p in self.current['packs']],
                 'models': [strip(m) for m in self.current['models']],
-                'maps': [{**x, 'files': [strip(f) for f in x['files']]} for x in self.current.get('maps', [])],
+                'maps': [{**x, 'files': [strip(f) for f in x['files']]} for x in self.maps()],
                 'address_indexes': [{**x, 'files': [strip(f) for f in x['files']]} for x in self.current.get('address_indexes', [])]}

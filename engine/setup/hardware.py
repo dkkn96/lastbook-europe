@@ -276,7 +276,7 @@ def measure_ai(llm_local, model_path, timeout=180):
         return None
     if not fit:
         return None
-    j = llm_local.judge(fit)
+    j = llm_local.judge(fit, Path(model_path).stat().st_size)
     return {'fits': bool(j['fits']), 'needs_bytes': int(j['needs']), 'estimate': False,
             'why': j.get('why') or f'Measured on this computer: the local AI needs about {_gb(j["needs"])} of memory, and it fits.'}
 

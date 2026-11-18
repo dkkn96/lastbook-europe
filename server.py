@@ -35,6 +35,7 @@ import engine.paths as lastbook_paths  # noqa: E402  (data folder and program fo
 from engine.paths import ro_uri  # noqa: E402
 from engine import saved_pages, address_search  # noqa: E402
 from engine.setup import api as setup_api  # noqa: E402  (the one module that may download: only when the person asks)
+from engine.setup.install import map_set  # noqa: E402
 HERE = lastbook_paths.DATA  # holds derived/
 APP = lastbook_paths.APP  # holds web/ and content/
 LIB = lastbook_paths.LIB
@@ -836,6 +837,10 @@ def data_version():
     """Changes whenever map data changes: every 20 s while the national map builds, and when the water inventory is written."""
     status = national_status()
     v = f"n{int(time.time() // 20)}" if status.get('state') == 'building' else f"n{status.get('features', 0)}"
+    region = regional_map()
+    revision = region and region.get('revision')
+    if isinstance(revision, str) and re.fullmatch(r'[0-9a-f]{16}', revision):
+        v += '.' + revision
     for f in (WATERDB, WATERDB.with_name(WATERDB.name + '-wal'), CROPDB, TERRAINDB, BLDGDB, BLDGDB.with_name(BLDGDB.name + '-wal')):
         try:
             v += f".{int(f.stat().st_mtime) // 60}"
@@ -1393,7 +1398,8 @@ def water_places(q, limit=10, near=None):
 
 
 def places(q, limit=20, near=None):
-    if address_search.is_address_query(q):
+    region = regional_map()
+    if address_search.is_address_query(q) and not region:
         return address_search.find_addresses(q, HERE / 'derived' / 'geo', limit=min(limit, 8), near=near)
     if not PLACEDB.exists():
         return []
@@ -1441,7 +1447,7 @@ def places(q, limit=20, near=None):
             continue
         seen.add(k)
         out.append({'name': name, 'kind': kind, 'detail': detail, 'lat': lat, 'lon': lon, 'source': src,
-                    'onMap': bool(pack_info()) or 32.5 < lat < 35.9 and -121.4 < lon < -114.1})
+                    'onMap': bool(region or pack_info()) or 32.5 < lat < 35.9 and -121.4 < lon < -114.1})
         if len(out) >= limit:
             break
     water = water_places(q, near=near)
@@ -1540,9 +1546,28 @@ def map_contents():
     return {'layers': sorted(kinds), 'bounds': bounds, 'detail': bool(boxes), 'contours': contours}
 
 
+@functools.lru_cache(maxsize=1)
+def regional_map():
+    info = map_set(HERE)
+    if not info or info.get('kind') != 'region' or not isinstance(info.get('title'), str):
+        return None
+    bounds = info.get('bounds')
+    if (isinstance(bounds, list) and len(bounds) == 4 and all(type(v) in (int, float) for v in bounds)
+            and -180 <= bounds[0] < bounds[2] <= 180 and -85 <= bounds[1] < bounds[3] <= 85):
+        return info
+    return None
+
+
 def map_info():
     db = mapdb()
     meta = dict(db.execute('SELECT key,value FROM meta').fetchall()) if db else {}
+    region = regional_map()
+    if region:
+        return {**map_contents(), 'bounds': region['bounds'], 'region': region['title'],
+                'meta': meta, 'aerial': False, 'version': data_version(),
+                'datasets': [{'label': region['title'], 'status': 'Offline streets, buildings, water and named places'},
+                             {'label': 'OpenStreetMap contributors · ODbL 1.0',
+                              'status': region.get('data_as_of') or 'Snapshot date unavailable'}]}
     geo = []
     for rel, label, status in [
         ('geography/openstreetmap/socal-latest-free.gpkg.zip', 'Southern California streets, buildings, water and places (OpenStreetMap)', 'Shown on this map'),
